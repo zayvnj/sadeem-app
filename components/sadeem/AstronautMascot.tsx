@@ -19,20 +19,34 @@ export function AstronautMascot() {
   }, [])
 
   return (
-    <div className="absolute inset-0 pointer-events-none z-50 flex items-center w-full h-full overflow-hidden">
+    <div className="absolute left-0 right-0 pointer-events-none z-[100] flex w-full overflow-hidden" style={{ bottom: '100%' }}>
       <style>{`
         @keyframes roamMascot {
-          0% { transform: translateX(-10vw); }
-          50% { transform: translateX(100vw); }
-          100% { transform: translateX(-10vw); }
+          0% { transform: translateX(0) scaleX(-1); }
+          49% { transform: translateX(calc(-100vw + 3.5rem)) scaleX(-1); }
+          50% { transform: translateX(calc(-100vw + 3.5rem)) scaleX(1); }
+          99% { transform: translateX(0) scaleX(1); }
+          100% { transform: translateX(0) scaleX(-1); }
+        }
+        @keyframes runLeftLeg {
+          0%, 100% { transform: rotate(15deg); }
+          50% { transform: rotate(-15deg); }
+        }
+        @keyframes runRightLeg {
+          0%, 100% { transform: rotate(-15deg); }
+          50% { transform: rotate(15deg); }
+        }
+        @keyframes spaceBounce {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-8px); }
         }
       `}</style>
       <AnimatePresence mode="wait">
         <div
           key="mascot-container"
-          className="absolute w-10 h-10 sm:w-14 sm:h-14 drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]"
+          className="relative w-10 h-10 sm:w-14 sm:h-14 drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]"
           style={{
-            animation: 'roamMascot 20s linear infinite',
+            animation: 'roamMascot 12s linear infinite',
             animationPlayState: isTired ? 'paused' : 'running',
           }}
         >
@@ -49,6 +63,13 @@ export function AstronautMascot() {
                 : { duration: 0.5 }
             }
             className="w-full h-full"
+            style={
+              !isTired
+                ? {
+                    animation: 'spaceBounce 1s ease-in-out infinite',
+                  }
+                : {}
+            }
           >
             {/* Astronaut SVG based on the provided reference image (premium style, white suit, teal visor, orange accents) */}
             <svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full drop-shadow-xl">
@@ -70,14 +91,18 @@ export function AstronautMascot() {
               </g>
 
               {/* Left Leg */}
-              <path d="M 85 140 L 75 170" stroke="#e4e4e7" strokeWidth="22" strokeLinecap="round" />
-              <path d="M 70 160 L 80 165" stroke="#f97316" strokeWidth="8" strokeLinecap="round" />
-              <path d="M 75 170 L 65 185 L 85 180 Z" fill="#7e22ce" />
+              <g style={{ transformOrigin: '85px 140px', animation: !isTired ? 'runLeftLeg 1s ease-in-out infinite' : 'none' }}>
+                <path d="M 85 140 L 75 170" stroke="#e4e4e7" strokeWidth="22" strokeLinecap="round" />
+                <path d="M 70 160 L 80 165" stroke="#f97316" strokeWidth="8" strokeLinecap="round" />
+                <path d="M 75 170 L 65 185 L 85 180 Z" fill="#7e22ce" />
+              </g>
 
               {/* Right Leg */}
-              <path d="M 115 140 L 135 160" stroke="#e4e4e7" strokeWidth="22" strokeLinecap="round" />
-              <path d="M 125 155 L 140 150" stroke="#f97316" strokeWidth="8" strokeLinecap="round" />
-              <path d="M 135 160 L 145 175 L 125 170 Z" fill="#7e22ce" />
+              <g style={{ transformOrigin: '115px 140px', animation: !isTired ? 'runRightLeg 1s ease-in-out infinite' : 'none' }}>
+                <path d="M 115 140 L 135 160" stroke="#e4e4e7" strokeWidth="22" strokeLinecap="round" />
+                <path d="M 125 155 L 140 150" stroke="#f97316" strokeWidth="8" strokeLinecap="round" />
+                <path d="M 135 160 L 145 175 L 125 170 Z" fill="#7e22ce" />
+              </g>
 
               {/* Body */}
               <rect x="70" y="80" width="60" height="70" rx="30" fill="#f4f4f5" />
