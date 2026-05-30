@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Cairo } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import { AstronautMascot } from '@/components/sadeem/AstronautMascot'
 import './globals.css'
 
 const cairo = Cairo({ subsets: ['arabic', 'latin'], variable: '--font-cairo' })
@@ -38,6 +39,7 @@ export default function RootLayout({
       <body className="font-sans antialiased">
         {children}
         {process.env.NODE_ENV === 'production' && <Analytics />}
+        <AstronautMascot />
       </body>
     </html>
   )
