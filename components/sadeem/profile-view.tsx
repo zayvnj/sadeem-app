@@ -1,7 +1,11 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { motion } from "framer-motion"
 import { Settings, Grid3x3, Film, Bookmark, Bell, Moon, Shield, LogOut } from "lucide-react"
+import { auth } from "../../lib/firebase"
+import { signOut, User } from "firebase/auth"
+
 
 const stats = [
   { label: "منشور", value: "٤٨" },
@@ -15,27 +19,43 @@ const tabs = [
   { icon: Bookmark, key: "saved" },
 ]
 
-const settings = [
-  { icon: Bell, label: "الإشعارات" },
-  { icon: Moon, label: "المظهر الداكن" },
-  { icon: Shield, label: "الخصوصية والأمان" },
-  { icon: LogOut, label: "تسجيل الخروج" },
-]
-
 const container = {
   hidden: { opacity: 0 },
   show: { opacity: 1, transition: { staggerChildren: 0.05 } },
 }
 const item = {
   hidden: { opacity: 0, scale: 0.9 },
-  show: { opacity: 1, scale: 1, transition: { type: "spring", stiffness: 300, damping: 22 } },
+  show: { opacity: 1, scale: 1, transition: { type: "spring" as const, stiffness: 300, damping: 22 } },
 }
 
 export function ProfileView() {
+  const [user, setUser] = useState<User | null>(null)
+
+  useEffect(() => {
+    // Current user should be set from AppShell, but fetching here just to be safe in case of standalone re-renders
+    setUser(auth.currentUser)
+  }, [])
+
+  const handleLogout = async () => {
+    await signOut(auth)
+  }
+
+  const username = user?.displayName ? `@${user.displayName.replace(/\s+/g, '_').toLowerCase()}` : "@user_sadeem"
+  const displayName = user?.displayName || "مستخدم سديم"
+  const email = user?.email || ""
+  const firstLetter = displayName.charAt(0).toUpperCase()
+
+  const settings = [
+    { icon: Bell, label: "الإشعارات" },
+    { icon: Moon, label: "المظهر الداكن" },
+    { icon: Shield, label: "الخصوصية والأمان" },
+    { icon: LogOut, label: "تسجيل الخروج", onClick: handleLogout, isDestructive: true },
+  ]
+
   return (
     <div className="pb-4">
       <div className="flex items-center justify-between px-4 pt-4">
-        <h2 className="text-lg font-bold">@user_sadeem</h2>
+        <h2 className="text-lg font-bold">{username}</h2>
         <button aria-label="الإعدادات" className="text-foreground">
           <Settings className="size-6" />
         </button>
@@ -47,9 +67,16 @@ export function ProfileView() {
         className="flex items-center gap-5 px-4 py-5"
       >
         <div className="rounded-full p-[3px] ring-2 ring-foreground">
-          <div className="flex size-20 items-center justify-center rounded-full bg-muted text-2xl font-bold text-muted-foreground">
-            س
-          </div>
+          {user?.photoURL ? (
+            <div className="relative size-20 overflow-hidden rounded-full">
+              {/* Using standard img to avoid Next.js external domain errors for firebase domains */}
+              <img src={user.photoURL} alt={displayName} className="size-full object-cover" />
+            </div>
+          ) : (
+            <div className="flex size-20 items-center justify-center rounded-full bg-muted text-2xl font-bold text-muted-foreground">
+              {firstLetter}
+            </div>
+          )}
         </div>
         <div className="flex flex-1 justify-around">
           {stats.map((s) => (
@@ -62,9 +89,9 @@ export function ProfileView() {
       </motion.div>
 
       <div className="px-4">
-        <p className="text-sm font-semibold">عبدالله · سديم</p>
+        <p className="text-sm font-semibold">{displayName}</p>
         <p className="mt-1 text-sm text-muted-foreground leading-relaxed">
-          مصمم ومحب للتصوير. أوثّق اللحظات الجميلة وأشاركها هنا 🌌
+          {email}
         </p>
       </div>
 
@@ -107,10 +134,11 @@ export function ProfileView() {
           {settings.map((s, i) => (
             <button
               key={s.label}
-              className={`flex w-full items-center gap-3 px-4 py-3.5 text-right transition-colors hover:bg-secondary ${i !== settings.length - 1 ? "border-b border-border" : ""}`}
+              onClick={s.onClick}
+              className={`flex w-full items-center gap-3 px-4 py-3.5 text-right transition-colors hover:bg-secondary ${i !== settings.length - 1 ? "border-b border-border" : ""} ${s.isDestructive ? "text-red-500 hover:text-red-600" : ""}`}
             >
-              <s.icon className="size-5 text-muted-foreground" />
-              <span className="text-sm">{s.label}</span>
+              <s.icon className={`size-5 ${s.isDestructive ? "text-red-500" : "text-muted-foreground"}`} />
+              <span className="text-sm font-medium">{s.label}</span>
             </button>
           ))}
         </div>
