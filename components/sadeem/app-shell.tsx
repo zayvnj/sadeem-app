@@ -1,14 +1,17 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { Heart, Send } from "lucide-react"
+import { onAuthStateChanged, User } from "firebase/auth"
+import { auth } from "@/lib/firebase"
 import { BottomNav } from "./bottom-nav"
 import { HomeFeed } from "./home-feed"
 import { ReelsView } from "./reels-view"
 import { AddView } from "./add-view"
 import { ChatView } from "./chat-view"
 import { ProfileView } from "./profile-view"
+import { AuthView } from "./auth-view"
 import type { TabKey } from "./types"
 
 const titles: Record<TabKey, string> = {
@@ -21,7 +24,39 @@ const titles: Record<TabKey, string> = {
 
 export function AppShell() {
   const [active, setActive] = useState<TabKey>("home")
+  const [user, setUser] = useState<User | null>(null)
+  const [loadingAuth, setLoadingAuth] = useState(true)
   const isReels = active === "reels"
+
+  useEffect(() => {
+    if (!auth) {
+      setLoadingAuth(false)
+      return
+    }
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser)
+      setLoadingAuth(false)
+    })
+    return () => unsubscribe()
+  }, [])
+
+  if (loadingAuth) {
+    return (
+      <div className="flex min-h-dvh w-full items-center justify-center bg-background">
+        <div className="size-8 rounded-full border-4 border-muted border-t-foreground animate-spin" />
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <div className="flex min-h-dvh w-full items-center justify-center bg-secondary p-0 sm:p-6">
+        <div className="relative flex h-dvh w-full max-w-md flex-col overflow-hidden sm:h-[860px] sm:rounded-[2.5rem] sm:border-8 sm:shadow-2xl bg-background sm:border-foreground">
+          <AuthView onAuthSuccess={() => {}} />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex min-h-dvh w-full items-center justify-center bg-secondary p-0 sm:p-6">
