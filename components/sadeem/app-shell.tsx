@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { Heart, Send } from "lucide-react"
 import { BottomNav } from "./bottom-nav"
@@ -9,7 +9,10 @@ import { ReelsView } from "./reels-view"
 import { AddView } from "./add-view"
 import { ChatView } from "./chat-view"
 import { ProfileView } from "./profile-view"
+import { AuthView } from "./auth-view"
 import type { TabKey } from "./types"
+import { auth } from "../../lib/firebase"
+import { onAuthStateChanged, User } from "firebase/auth"
 
 const titles: Record<TabKey, string> = {
   home: "سديم",
@@ -21,10 +24,32 @@ const titles: Record<TabKey, string> = {
 
 export function AppShell() {
   const [active, setActive] = useState<TabKey>("home")
+  const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
   const isReels = active === "reels"
 
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser)
+      setLoading(false)
+    })
+    return () => unsubscribe()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex min-h-dvh w-full items-center justify-center bg-background">
+        <div className="size-8 animate-spin rounded-full border-4 border-foreground border-t-transparent" />
+      </div>
+    )
+  }
+
+  if (!user) {
+    return <AuthView />
+  }
+
   return (
-    <div className="flex min-h-dvh w-full items-center justify-center bg-secondary p-0 sm:p-6">
+    <div className="flex min-h-dvh w-full items-center justify-center bg-secondary p-0 sm:p-6" dir="rtl">
       {/* Phone frame */}
       <div
         className={`relative flex h-dvh w-full max-w-md flex-col overflow-hidden sm:h-[860px] sm:rounded-[2.5rem] sm:border-8 sm:shadow-2xl transition-colors duration-300 ${
