@@ -28,6 +28,8 @@ export function ChatView() {
   const [newMessage, setNewMessage] = useState("")
   const [loadingChats, setLoadingChats] = useState(true)
   const [loadingMessages, setLoadingMessages] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [searchResults, setSearchResults] = useState<any[]>([])
   const currentUser = auth?.currentUser
 
   useEffect(() => {
@@ -51,17 +53,56 @@ export function ChatView() {
 
   const fetchChats = async () => {
     if (!currentUser) return
+    setLoadingChats(true)
     try {
-      // Fetch distinct chats for the user (mock logic: just fetching users as "chats" for now)
-      // Ideally, there should be a `chats` or `conversations` table
-      const { data, error } = await supabase
-        .from('users') // Updated to match new schema
+      // Step 1: Fetch chats where current user is a participant
+      const { data: chatsData, error: chatsError } = await supabase
+        .from('chats')
         .select('*')
-        .neq('id', currentUser.uid)
-        .limit(5)
+        .contains('participant_ids', [currentUser.uid])
 
-      if (error && error.code !== '42P01') console.error(error)
-      setChats(data || [])
+      if (chatsError && chatsError.code !== '42P01') console.error(chatsError)
+
+      const activeChats = chatsData || []
+
+      // Step 2: For each chat, fetch the other participant's details and the latest message
+      const enrichedChats = await Promise.all(activeChats.map(async (chat) => {
+        // Find the other participant ID
+        const otherParticipantId = chat.participant_ids.find((id: string) => id !== currentUser.uid) || chat.participant_ids[0]
+
+        // Fetch user details
+        const { data: userData } = await supabase
+          .from('users')
+          .select('id, full_name, username, avatar_url')
+          .eq('id', otherParticipantId)
+          .single()
+
+        // Fetch latest message
+        const { data: msgData } = await supabase
+          .from('messages')
+          .select('text, created_at')
+          .eq('chat_id', chat.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        return {
+          id: chat.id,
+          user: userData || { id: otherParticipantId, full_name: 'مستخدم غير معروف' },
+          lastMessage: msgData?.text || 'لا توجد رسائل',
+          lastMessageTime: msgData?.created_at,
+          unread: 0 // Mock for now
+        }
+      }))
+
+      // Sort by latest message time
+      enrichedChats.sort((a, b) => {
+        if (!a.lastMessageTime) return 1;
+        if (!b.lastMessageTime) return -1;
+        return new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime();
+      });
+
+      setChats(enrichedChats)
     } catch (err) {
       console.error(err)
     } finally {
@@ -69,16 +110,81 @@ export function ChatView() {
     }
   }
 
-  const openChat = async (chatUser: any) => {
-    setActiveChat(chatUser)
+  useEffect(() => {
+    const searchUsers = async () => {
+      if (!searchQuery.trim()) {
+        setSearchResults([])
+        return
+      }
+
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, full_name, username, avatar_url')
+        .ilike('username', `%${searchQuery}%`)
+        .neq('id', currentUser?.uid)
+        .limit(5)
+
+      if (error) {
+        console.error("Error searching users:", error)
+      } else {
+        setSearchResults(data || [])
+      }
+    }
+
+    const debounce = setTimeout(() => {
+      searchUsers()
+    }, 300)
+
+    return () => clearTimeout(debounce)
+  }, [searchQuery, currentUser?.uid])
+
+  const handleUserSelect = async (selectedUser: any) => {
+    if (!currentUser) return
+    setSearchQuery("")
+    setSearchResults([])
+
+    // Check if chat already exists
+    const { data: existingChats, error: checkError } = await supabase
+      .from('chats')
+      .select('id')
+      .contains('participant_ids', [currentUser.uid, selectedUser.id])
+
+    let chatId = null
+
+    if (existingChats && existingChats.length > 0) {
+      // Use existing chat
+      chatId = existingChats[0].id
+    } else {
+      // Create new chat
+      const { data: newChat, error: createError } = await supabase
+        .from('chats')
+        .insert({
+          participant_ids: [currentUser.uid, selectedUser.id],
+        })
+        .select('id')
+        .single()
+
+      if (createError) {
+        console.error("Error creating chat:", createError)
+        return
+      }
+      chatId = newChat.id
+    }
+
+    // Open the chat
+    openChat(chatId, selectedUser)
+  }
+
+  const openChat = async (chatId: string, chatUser: any) => {
+    setActiveChat({ id: chatId, user: chatUser })
     setLoadingMessages(true)
 
-    // Fetch messages between currentUser and chatUser
+    // Fetch messages for this chat_id
     try {
       const { data, error } = await supabase
         .from('messages')
         .select('*')
-        .or(`and(sender_id.eq.${currentUser?.uid},receiver_id.eq.${chatUser.id}),and(sender_id.eq.${chatUser.id},receiver_id.eq.${currentUser?.uid})`)
+        .eq('chat_id', chatId)
         .order('created_at', { ascending: true })
 
       if (error && error.code !== '42P01') console.error(error)
@@ -89,17 +195,23 @@ export function ChatView() {
       setLoadingMessages(false)
     }
 
+  }
+
+  useEffect(() => {
+    if (!activeChat?.id) return;
+
     // Subscribe to realtime messages for this specific chat
     const messageChannel = supabase
-      .channel(`chat:${chatUser.id}`)
+      .channel(`chat:${activeChat.id}`)
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
         table: 'messages',
-        filter: `receiver_id=eq.${currentUser?.uid}`
+        filter: `chat_id=eq.${activeChat.id}`
       }, (payload) => {
-        if (payload.new.sender_id === chatUser.id) {
-          setMessages((prev) => [...prev, payload.new])
+        // Only add if we didn't just send it (to avoid double adding optimistic UI messages)
+        if (payload.new.sender_id !== currentUser?.uid) {
+           setMessages((prev) => [...prev, payload.new])
         }
       })
       .subscribe()
@@ -107,7 +219,7 @@ export function ChatView() {
     return () => {
       supabase.removeChannel(messageChannel)
     }
-  }
+  }, [activeChat?.id, currentUser?.uid]);
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -115,8 +227,8 @@ export function ChatView() {
 
     const tempMessage = {
       id: Date.now().toString(),
+      chat_id: activeChat.id,
       sender_id: currentUser.uid,
-      receiver_id: activeChat.id,
       text: newMessage,
       created_at: new Date().toISOString()
     }
@@ -126,21 +238,14 @@ export function ChatView() {
 
     try {
       await supabase.from('messages').insert({
+        chat_id: activeChat.id,
         sender_id: currentUser.uid,
-        receiver_id: activeChat.id,
         text: tempMessage.text
       })
     } catch (error) {
       console.error('Error sending message:', error)
     }
   }
-
-  // Fallback UI if no chats
-  const fallbackChats = [
-    { name: "نورة الشمري", last: "تمام، نتقابل بكرة 👍", time: "٩:٤١", unread: 2, id: '1' },
-    { name: "مجموعة العائلة", last: "سالم: تم إرسال الصور", time: "٨:١٥", unread: 5, id: '2' },
-  ]
-  const displayChats = chats.length > 0 ? chats : fallbackChats
 
   if (activeChat) {
     return (
@@ -149,11 +254,15 @@ export function ChatView() {
           <button onClick={() => setActiveChat(null)} className="p-2 -mr-2 rounded-full hover:bg-secondary">
             <ArrowRight className="size-5" />
           </button>
-          <div className="size-10 rounded-full bg-muted flex items-center justify-center font-bold text-muted-foreground">
-            {(activeChat.name || activeChat.id || "م").charAt(0)}
-          </div>
+          {activeChat.user?.avatar_url ? (
+            <img src={activeChat.user.avatar_url} alt="" className="size-10 rounded-full object-cover" />
+          ) : (
+            <div className="size-10 rounded-full bg-muted flex items-center justify-center font-bold text-muted-foreground">
+              {(activeChat.user?.full_name || activeChat.user?.username || "م").charAt(0)}
+            </div>
+          )}
           <div className="flex flex-col">
-            <span className="font-semibold text-sm">{activeChat.name || `مستخدم ${activeChat.id?.substring(0,4)}`}</span>
+            <span className="font-semibold text-sm">{activeChat.user?.full_name || activeChat.user?.username || `مستخدم`}</span>
             <span className="text-xs text-green-500">متصل الآن</span>
           </div>
         </div>
@@ -199,11 +308,39 @@ export function ChatView() {
         <div className="flex items-center gap-2 rounded-full bg-secondary px-4 py-2.5">
           <Search className="size-4 text-muted-foreground" />
           <input
-            placeholder="ابحث في المحادثات"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="ابحث عن مستخدمين بالاسم..."
             className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
         </div>
       </div>
+
+      {searchQuery && searchResults.length > 0 && (
+        <div className="px-4 mt-2">
+          <div className="rounded-xl border border-border bg-card p-2 shadow-sm">
+            {searchResults.map((user) => (
+              <button
+                key={user.id}
+                onClick={() => handleUserSelect(user)}
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-right hover:bg-secondary transition-colors"
+              >
+                {user.avatar_url ? (
+                  <img src={user.avatar_url} alt="" className="size-10 rounded-full object-cover" />
+                ) : (
+                  <div className="flex size-10 items-center justify-center rounded-full bg-muted font-bold text-muted-foreground">
+                    {(user.full_name || user.username || "م").charAt(0)}
+                  </div>
+                )}
+                <div className="flex flex-col">
+                  <span className="text-sm font-semibold">{user.full_name || user.username}</span>
+                  <span className="text-xs text-muted-foreground">@{user.username}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* AI assistant pinned */}
       <motion.button
@@ -224,37 +361,53 @@ export function ChatView() {
         </span>
       </motion.button>
 
-      {loadingChats ? (
-        <div className="flex justify-center py-10"><Loader2 className="size-8 animate-spin text-muted-foreground" /></div>
-      ) : (
-        <motion.ul variants={container} initial="hidden" animate="show">
-          {displayChats.map((chat) => {
-            const name = chat.name || `مستخدم ${chat.id?.substring(0,4)}`
-            return (
-              <motion.li key={chat.id} variants={item}>
-                <button onClick={() => openChat(chat)} className="flex w-full items-center gap-3 px-4 py-3 text-right transition-colors hover:bg-secondary">
-                  <span className="flex size-12 items-center justify-center rounded-full bg-muted font-semibold text-muted-foreground">
-                    {name.charAt(0)}
-                  </span>
-                  <span className="flex-1">
-                    <span className="flex items-center justify-between">
-                      <span className="text-sm font-semibold">{name}</span>
-                      <span className="text-xs text-muted-foreground">{chat.time || "الآن"}</span>
+      {!searchQuery && (
+        loadingChats ? (
+          <div className="flex justify-center py-10"><Loader2 className="size-8 animate-spin text-muted-foreground" /></div>
+        ) : chats.length > 0 ? (
+          <motion.ul variants={container} initial="hidden" animate="show">
+            {chats.map((chat) => {
+              const name = chat.user.full_name || chat.user.username || `مستخدم`
+
+              // Format time simple
+              const timeString = chat.lastMessageTime
+                ? new Date(chat.lastMessageTime).toLocaleTimeString('ar-SA', { hour: 'numeric', minute: 'numeric' })
+                : "الآن"
+
+              return (
+                <motion.li key={chat.id} variants={item}>
+                  <button onClick={() => openChat(chat.id, chat.user)} className="flex w-full items-center gap-3 px-4 py-3 text-right transition-colors hover:bg-secondary">
+                    {chat.user.avatar_url ? (
+                      <img src={chat.user.avatar_url} alt="" className="size-12 rounded-full object-cover" />
+                    ) : (
+                      <span className="flex size-12 items-center justify-center rounded-full bg-muted font-semibold text-muted-foreground">
+                        {name.charAt(0)}
+                      </span>
+                    )}
+                    <span className="flex-1">
+                      <span className="flex items-center justify-between">
+                        <span className="text-sm font-semibold">{name}</span>
+                        <span className="text-xs text-muted-foreground">{timeString}</span>
+                      </span>
+                      <span className="mt-0.5 flex items-center justify-between gap-2">
+                        <span className="block text-xs text-muted-foreground truncate">{chat.lastMessage}</span>
+                        {chat.unread > 0 && (
+                          <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-foreground text-[10px] font-bold text-background">
+                            {chat.unread}
+                          </span>
+                        )}
+                      </span>
                     </span>
-                    <span className="mt-0.5 flex items-center justify-between gap-2">
-                      <span className="block text-xs text-muted-foreground truncate">{chat.last || "انقر لبدء المحادثة"}</span>
-                      {chat.unread > 0 && (
-                        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-foreground text-[10px] font-bold text-background">
-                          {chat.unread}
-                        </span>
-                      )}
-                    </span>
-                  </span>
-                </button>
-              </motion.li>
-            )
-          })}
-        </motion.ul>
+                  </button>
+                </motion.li>
+              )
+            })}
+          </motion.ul>
+        ) : (
+          <div className="py-10 text-center text-sm text-muted-foreground">
+            لا توجد محادثات. ابحث عن مستخدمين لبدء الدردشة.
+          </div>
+        )
       )}
     </div>
   )
