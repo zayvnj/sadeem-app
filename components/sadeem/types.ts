@@ -1,1 +1,1 @@
-export type TabKey = "home" | "reels" | "add" | "chat" | "profile"
+export type TabKey = "home" | "reels" | "add" | "chat" | "profile" | "notifications"

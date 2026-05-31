@@ -66,14 +66,14 @@ export function AstronautMascot() {
         // 5 buttons evenly spaced in a flex container.
         // Button centers are approx at 10%, 30%, 50%, 70%, 90%
         const buttonCenters = [10, 30, 50, 70, 90]
-        const targetVw = buttonCenters[randomButtonIndex]
+        const targetPct = buttonCenters[randomButtonIndex]
 
         // Move into resting position (sit down)
         // Set direction to left (default sitting direction, maybe random too)
-        setDirection(targetVw > 50 ? 'left' : 'right')
+        setDirection(targetPct > 50 ? 'left' : 'right')
 
         await controls.start({
-          x: `calc(${targetVw}vw - 2rem)`,
+          x: `calc(${targetPct}% - 2rem)`,
           transition: { duration: 0.5, ease: 'easeInOut' }
         })
 
@@ -89,17 +89,17 @@ export function AstronautMascot() {
   }, [controls])
 
   return (
-    <div className="absolute left-0 right-0 pointer-events-none z-[100] w-full" style={{ bottom: '100%' }}>
+    <div className="absolute left-0 right-0 pointer-events-none z-[100] w-full h-0" style={{ bottom: '100%' }}>
       <motion.div
         className="absolute bottom-0 w-16 h-16 origin-bottom"
         animate={controls}
-        initial={{ x: 'calc(100vw - 4rem)' }}
+        initial={{ x: 'calc(100% - 4rem)' }}
       >
         <motion.div
             className="w-full h-full origin-bottom"
             animate={{
                 scaleX: direction === 'left' ? 1 : -1,
-                y: state === 'resting' ? 12 : 0 // Drop down to sit on the edge
+                y: state === 'resting' ? 24 : 0 // Drop down to sit on the edge
             }}
             transition={{ duration: 0.3 }}
         >
@@ -107,7 +107,7 @@ export function AstronautMascot() {
              <div className="relative w-full h-full drop-shadow-lg">
 
                 {/* SVG Chibi Astronaut */}
-                <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full overflow-visible">
+                <svg viewBox="-20 -20 140 140" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full overflow-visible">
 
                     {/* LEGS: Animated differently based on state */}
                     <g className="legs">
