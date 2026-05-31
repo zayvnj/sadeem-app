@@ -12,6 +12,7 @@ import { AddView } from "./add-view"
 import { ChatView } from "./chat-view"
 import { ProfileView } from "./profile-view"
 import { AuthView } from "./auth-view"
+import { NotificationsView } from "./notifications-view"
 import type { TabKey } from "./types"
 
 const titles: Record<TabKey, string> = {
@@ -20,12 +21,14 @@ const titles: Record<TabKey, string> = {
   add: "إنشاء",
   chat: "المحادثات",
   profile: "الملف الشخصي",
+  notifications: "الإشعارات",
 }
 
 export function AppShell() {
   const [active, setActive] = useState<TabKey>("home")
   const [user, setUser] = useState<User | null>(null)
   const [loadingAuth, setLoadingAuth] = useState(true)
+  const [isSingleChatOpen, setIsSingleChatOpen] = useState(false)
   const isReels = active === "reels"
 
   useEffect(() => {
@@ -81,10 +84,16 @@ export function AppShell() {
           >
             {titles[active]}
           </motion.h1>
-          <div className="flex items-center gap-4">
-            <Heart className="size-6" />
-            <Send className="size-6" />
-          </div>
+          {active === "home" && (
+            <div className="flex items-center gap-4">
+              <button onClick={() => setActive("notifications")} className="rounded-full p-1 hover:bg-secondary transition-colors">
+                <Heart className="size-6" />
+              </button>
+              <button onClick={() => setActive("chat")} className="rounded-full p-1 hover:bg-secondary transition-colors">
+                <Send className="size-6" />
+              </button>
+            </div>
+          )}
         </header>
 
         {/* Content */}
@@ -101,16 +110,19 @@ export function AppShell() {
               {active === "home" && <HomeFeed />}
               {active === "reels" && <ReelsView />}
               {active === "add" && <AddView />}
-              {active === "chat" && <ChatView />}
+              {active === "chat" && <ChatView onChatOpenStateChange={setIsSingleChatOpen} />}
               {active === "profile" && <ProfileView />}
+              {active === "notifications" && <NotificationsView />}
             </motion.div>
           </AnimatePresence>
         </main>
 
         {/* Bottom navigation */}
-        <div className="shrink-0">
-          <BottomNav active={active} onChange={setActive} dark={isReels} />
-        </div>
+        {!isSingleChatOpen && (
+          <div className="shrink-0">
+            <BottomNav active={active} onChange={setActive} dark={isReels} />
+          </div>
+        )}
       </div>
     </div>
   )

@@ -21,7 +21,11 @@ const item = {
   show: { opacity: 1, x: 0, transition: { type: "spring" as const, stiffness: 280, damping: 26 } },
 }
 
-export function ChatView() {
+interface ChatViewProps {
+  onChatOpenStateChange?: (isOpen: boolean) => void;
+}
+
+export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
   const [chats, setChats] = useState<any[]>([])
   const [activeChat, setActiveChat] = useState<any | null>(null)
   const [messages, setMessages] = useState<any[]>([])
@@ -178,6 +182,7 @@ export function ChatView() {
 
   const openChat = async (chatId: string, chatUser: any) => {
     setActiveChat({ id: chatId, user: chatUser })
+    if (onChatOpenStateChange) onChatOpenStateChange(true)
     setLoadingMessages(true)
 
     // Fetch messages for this chat_id
@@ -263,7 +268,7 @@ export function ChatView() {
     return (
       <div className="flex flex-col h-full bg-background relative pb-20">
         <div className="flex items-center gap-3 px-4 py-3 border-b border-border sticky top-0 bg-background z-10">
-          <button onClick={() => setActiveChat(null)} className="p-2 -mr-2 rounded-full hover:bg-secondary">
+          <button onClick={() => { setActiveChat(null); if (onChatOpenStateChange) onChatOpenStateChange(false); }} className="p-2 -mr-2 rounded-full hover:bg-secondary">
             <ArrowRight className="size-5" />
           </button>
           {activeChat.user?.avatar_url ? (

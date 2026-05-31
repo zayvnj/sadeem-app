@@ -6,6 +6,7 @@ import { Mail, Lock, User, ArrowRight, Chrome } from "lucide-react"
 import { Capacitor } from "@capacitor/core"
 import { FirebaseAuthentication } from "@capacitor-firebase/authentication"
 import { auth } from "../../lib/firebase"
+import { supabase } from "../../lib/supabase"
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -55,18 +56,42 @@ export function AuthView() {
     setLoading(true)
     setError("")
     try {
+
+      let userCred;
       if (Capacitor.isNativePlatform()) {
         const result = await FirebaseAuthentication.signInWithGoogle()
         if (result.credential?.idToken) {
           const credential = GoogleAuthProvider.credential(result.credential.idToken)
-          await signInWithCredential(auth, credential)
+          userCred = await signInWithCredential(auth, credential)
         } else {
           throw new Error("لم يتم إرجاع Token صالح من تسجيل دخول Google")
         }
       } else {
         const provider = new GoogleAuthProvider()
-        await signInWithPopup(auth, provider)
+        userCred = await signInWithPopup(auth, provider)
       }
+
+      // Sync user with Supabase
+      if (userCred && userCred.user) {
+        const { user } = userCred;
+        const { data, error } = await supabase.from('users').select('id').eq('id', user.uid).single();
+
+        if (error && error.code === 'PGRST116') {
+          // User doesn't exist, insert
+          const isVip = ['sly86055r@gmail.com', 'zainalabdeensalman123@gmail.com'].includes(user.email || '');
+          const usernameBase = (user.email?.split('@')[0] || `user_${user.uid.substring(0, 5)}`).replace(/[^a-zA-Z0-9_]/g, '').substring(0, 14);
+
+          await supabase.from('users').insert({
+            id: user.uid,
+            full_name: user.displayName || 'مستخدم',
+            username: usernameBase,
+            email: user.email,
+            avatar_url: user.photoURL,
+            is_verified: isVip
+          });
+        }
+      }
+
     } catch (err: any) {
       setError(err.message || "فشل تسجيل الدخول بواسطة Google")
       console.error("Google Sign-In Error:", err)
