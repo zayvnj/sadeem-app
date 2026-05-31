@@ -3,6 +3,8 @@
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Mail, Lock, User, ArrowRight, Chrome } from "lucide-react"
+import { Capacitor } from "@capacitor/core"
+import { FirebaseAuthentication } from "@capacitor-firebase/authentication"
 import { auth } from "../../lib/firebase"
 import {
   signInWithEmailAndPassword,
@@ -10,6 +12,7 @@ import {
   sendPasswordResetEmail,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithCredential,
   updateProfile
 } from "firebase/auth"
 
@@ -52,10 +55,21 @@ export function AuthView() {
     setLoading(true)
     setError("")
     try {
-      const provider = new GoogleAuthProvider()
-      await signInWithPopup(auth, provider)
+      if (Capacitor.isNativePlatform()) {
+        const result = await FirebaseAuthentication.signInWithGoogle()
+        if (result.credential?.idToken) {
+          const credential = GoogleAuthProvider.credential(result.credential.idToken)
+          await signInWithCredential(auth, credential)
+        } else {
+          throw new Error("لم يتم إرجاع Token صالح من تسجيل دخول Google")
+        }
+      } else {
+        const provider = new GoogleAuthProvider()
+        await signInWithPopup(auth, provider)
+      }
     } catch (err: any) {
       setError(err.message || "فشل تسجيل الدخول بواسطة Google")
+      console.error("Google Sign-In Error:", err)
     } finally {
       setLoading(false)
     }
