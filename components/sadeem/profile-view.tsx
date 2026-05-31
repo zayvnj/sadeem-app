@@ -6,6 +6,7 @@ import { Settings, Grid3x3, Film, Bookmark, Bell, Moon, Shield, LogOut, Loader2 
 import { supabase } from "@/lib/supabase"
 import { auth } from "@/lib/firebase"
 import { signOut } from "firebase/auth"
+import { Preferences } from '@capacitor/preferences'
 
 const tabs = [
   { icon: Grid3x3, key: "grid" },
@@ -14,10 +15,10 @@ const tabs = [
 ]
 
 const settings = [
-  { icon: Bell, label: "الإشعارات" },
-  { icon: Moon, label: "المظهر الداكن" },
-  { icon: Shield, label: "الخصوصية والأمان" },
-  { icon: LogOut, label: "تسجيل الخروج" },
+  { icon: Bell, label: "الإشعارات", key: "notifications" },
+  { icon: Moon, label: "المظهر الداكن", key: "dark_mode" },
+  { icon: Shield, label: "الخصوصية والأمان", key: "privacy" },
+  { icon: LogOut, label: "تسجيل الخروج", key: "logout" },
 ]
 
 const container = {
@@ -70,9 +71,14 @@ export function ProfileView() {
 
   const handleLogout = async () => {
     try {
+      setLoading(true)
       await signOut(auth)
+      await Preferences.clear()
+      localStorage.clear()
+      window.location.reload()
     } catch (error) {
       console.error('Error signing out:', error)
+      setLoading(false)
     }
   }
 
@@ -86,7 +92,7 @@ export function ProfileView() {
 
   const username = profile?.username || currentUser?.email?.split('@')[0] || "مستخدم_سديم"
   const fullName = profile?.full_name || "مستخدم سديم"
-  const bio = profile?.bio || "أهلاً بك في حسابي على سديم 🌌"
+  const bio = profile?.bio || "لا يوجد بايو حتى الآن"
 
   const stats = [
     { label: "منشور", value: posts.length.toString() },
