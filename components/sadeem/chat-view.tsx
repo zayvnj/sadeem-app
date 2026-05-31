@@ -165,6 +165,7 @@ export function ChatView() {
         .single()
 
       if (createError) {
+        alert("Insert Error: " + JSON.stringify(createError))
         console.error("Error creating chat:", createError)
         return
       }
@@ -225,6 +226,11 @@ export function ChatView() {
     e.preventDefault()
     if (!newMessage.trim() || !activeChat || !currentUser) return
 
+    if (!activeChat.id || typeof activeChat.id !== 'string' || activeChat.id.length < 10) {
+      alert("Invalid chat_id: " + activeChat.id);
+      return;
+    }
+
     const tempMessage = {
       id: Date.now().toString(),
       chat_id: activeChat.id,
@@ -233,16 +239,22 @@ export function ChatView() {
       created_at: new Date().toISOString()
     }
 
-    setMessages((prev) => [...prev, tempMessage])
-    setNewMessage("")
-
     try {
-      await supabase.from('messages').insert({
+      const { error } = await supabase.from('messages').insert({
         chat_id: activeChat.id,
         sender_id: currentUser.uid,
         content: tempMessage.content
       })
+
+      if (error) {
+        alert("Insert Error: " + JSON.stringify(error))
+        return
+      }
+
+      setMessages((prev) => [...prev, tempMessage])
+      setNewMessage("")
     } catch (error) {
+      alert("Insert Error: " + JSON.stringify(error))
       console.error('Error sending message:', error)
     }
   }
