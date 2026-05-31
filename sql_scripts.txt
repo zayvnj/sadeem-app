@@ -1,0 +1,37 @@
+-- RLS update for Firebase Auth + Supabase DB workaround
+-- Execute this in the Supabase SQL Editor
+
+-- 1. Enable RLS on all relevant tables (if not already enabled)
+ALTER TABLE posts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE stories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reels ENABLE ROW LEVEL SECURITY;
+ALTER TABLE comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE post_likes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reel_likes ENABLE ROW LEVEL SECURITY;
+
+-- 2. Drop existing policies (optional, to avoid conflicts)
+DROP POLICY IF EXISTS "Allow all" ON posts;
+DROP POLICY IF EXISTS "Allow all" ON stories;
+DROP POLICY IF EXISTS "Allow all" ON reels;
+DROP POLICY IF EXISTS "Allow all" ON comments;
+DROP POLICY IF EXISTS "Allow all" ON post_likes;
+DROP POLICY IF EXISTS "Allow all" ON reel_likes;
+
+-- 3. Create open policies for testing (since JWT signature validation might fail due to mismatched secrets)
+-- Note: In production, consider verifying x-firebase-uid or writing a custom JWT verification function.
+CREATE POLICY "Allow all operations for testing" ON posts FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all operations for testing" ON stories FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all operations for testing" ON reels FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all operations for testing" ON comments FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all operations for testing" ON post_likes FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all operations for testing" ON reel_likes FOR ALL USING (true) WITH CHECK (true);
+
+-- 4. For media bucket, ensure storage allows open access for uploads
+-- Note: Replace 'media' with your actual bucket name if different.
+CREATE POLICY "Allow media uploads for testing"
+ON storage.objects FOR INSERT
+WITH CHECK (bucket_id = 'media' AND current_setting('request.headers')::json->>'x-firebase-uid' IS NOT NULL);
+
+CREATE POLICY "Allow media reads for all"
+ON storage.objects FOR SELECT
+USING (bucket_id = 'media');
