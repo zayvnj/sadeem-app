@@ -8,6 +8,7 @@ import { auth } from "@/lib/firebase"
 import { BottomNav } from "./bottom-nav"
 import { HomeFeed } from "./home-feed"
 import { ReelsView } from "./reels-view"
+import { AstronautMascot } from "./AstronautMascot"
 import { AddView } from "./add-view"
 import { ChatView } from "./chat-view"
 import { ProfileView } from "./profile-view"
@@ -27,6 +28,11 @@ export function AppShell() {
   const [user, setUser] = useState<User | null>(null)
   const [loadingAuth, setLoadingAuth] = useState(true)
   const isReels = active === "reels"
+
+  // Emit event when active tab changes
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('mascot-action', { detail: 'wave' }))
+  }, [active])
 
   useEffect(() => {
     if (!auth) {
@@ -108,7 +114,8 @@ export function AppShell() {
         </main>
 
         {/* Bottom navigation */}
-        <div className="shrink-0">
+        <div className="shrink-0 relative">
+          <AstronautMascot />
           <BottomNav active={active} onChange={setActive} dark={isReels} />
         </div>
       </div>
