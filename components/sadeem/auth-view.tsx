@@ -4,6 +4,7 @@ import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Mail, Lock, User, ArrowRight, Chrome } from "lucide-react"
 import { Capacitor } from "@capacitor/core"
+import { toast } from "sonner"
 import { FirebaseAuthentication } from "@capacitor-firebase/authentication"
 import { auth } from "../../lib/firebase"
 import { supabase } from "../../lib/supabase"
@@ -55,33 +56,43 @@ export function AuthView() {
   const handleGoogleSignIn = async () => {
     setLoading(true)
     setError("")
+    console.log("[Google Auth] Step 1: Starting Google Sign-In process");
     try {
-
       let userCred;
       if (Capacitor.isNativePlatform()) {
+        console.log("[Google Auth] Step 2a: Running in native platform (Capacitor)");
         const result = await FirebaseAuthentication.signInWithGoogle()
+        console.log("[Google Auth] Step 3a: Result from FirebaseAuthentication plugin:", result);
         if (result.credential?.idToken) {
+          console.log("[Google Auth] Step 4a: Using idToken to create Google credential");
           const credential = GoogleAuthProvider.credential(result.credential.idToken)
+          console.log("[Google Auth] Step 5a: Signing in with credential");
           userCred = await signInWithCredential(auth, credential)
+          console.log("[Google Auth] Step 6a: Successfully signed in with credential", userCred.user?.uid);
         } else {
           throw new Error("لم يتم إرجاع Token صالح من تسجيل دخول Google")
         }
       } else {
+        console.log("[Google Auth] Step 2b: Running in web platform");
         const provider = new GoogleAuthProvider()
+        console.log("[Google Auth] Step 3b: GoogleAuthProvider instantiated");
         userCred = await signInWithPopup(auth, provider)
+        console.log("[Google Auth] Step 4b: Successfully signed in with popup", userCred.user?.uid);
       }
 
+      console.log("[Google Auth] Step 7: Starting Supabase sync");
       // Sync user with Supabase
       if (userCred && userCred.user) {
         const { user } = userCred;
         const { data, error } = await supabase.from('users').select('id').eq('id', user.uid).single();
 
         if (error && error.code === 'PGRST116') {
+          console.log("[Google Auth] Step 8: User doesn't exist in Supabase, inserting");
           // User doesn't exist, insert
           const isVip = ['sly86055r@gmail.com', 'zainalabdeensalman123@gmail.com'].includes(user.email || '');
           const usernameBase = (user.email?.split('@')[0] || `user_${user.uid.substring(0, 5)}`).replace(/[^a-zA-Z0-9_]/g, '').substring(0, 14);
 
-          await supabase.from('users').insert({
+          const insertResult = await supabase.from('users').insert({
             id: user.uid,
             full_name: user.displayName || 'مستخدم',
             username: usernameBase,
@@ -89,13 +100,22 @@ export function AuthView() {
             avatar_url: user.photoURL,
             is_verified: isVip
           });
+          console.log("[Google Auth] Step 9: Insert result:", insertResult);
+        } else {
+           console.log("[Google Auth] Step 8: User exists or other Supabase error:", error);
         }
+        console.log("[Google Auth] Step 10: Sync complete");
       }
 
     } catch (err: any) {
-      setError(err.message || "فشل تسجيل الدخول بواسطة Google")
-      console.error("Google Sign-In Error:", err)
+      console.error("[Google Auth] Catch Block Error:", err)
+      const errorCode = err.code || "UNKNOWN_CODE"
+      const errorMessage = err.message || "An unknown error occurred"
+
+      toast.error(`Google Auth Error: ${errorCode} - ${errorMessage}`)
+      setError(errorMessage)
     } finally {
+      console.log("[Google Auth] Finally Block: Process finished");
       setLoading(false)
     }
   }
