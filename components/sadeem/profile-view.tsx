@@ -40,7 +40,7 @@ export function ProfileView() {
     try {
       // 1. Fetch Profile Info
       const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
+        .from('users')
         .select('*')
         .eq('id', currentUser.uid)
         .single()
@@ -143,7 +143,7 @@ export function ProfileView() {
              if (newName || newBio) {
                 setLoading(true);
                 try {
-                  await supabase.from('profiles').update({
+                  await supabase.from('users').update({
                     full_name: newName || profile?.full_name,
                     bio: newBio || profile?.bio
                   }).eq('id', currentUser?.uid);

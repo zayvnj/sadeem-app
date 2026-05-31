@@ -55,7 +55,7 @@ export function ChatView() {
       // Fetch distinct chats for the user (mock logic: just fetching users as "chats" for now)
       // Ideally, there should be a `chats` or `conversations` table
       const { data, error } = await supabase
-        .from('profiles') // Assuming profiles exist, or fallback
+        .from('users') // Updated to match new schema
         .select('*')
         .neq('id', currentUser.uid)
         .limit(5)
