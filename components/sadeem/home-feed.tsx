@@ -26,14 +26,27 @@ export function HomeFeed() {
 
   const fetchFeedData = async () => {
     try {
-      // Fetch posts (mock joined with user data for now if tables aren't perfectly set up)
+      const user = auth?.currentUser
+
+      // Fetch posts
       const { data: postsData, error: postsError } = await supabase
         .from('posts')
-        .select('*')
+        .select('*, post_likes(user_id)')
         .order('created_at', { ascending: false })
         .limit(10)
 
       if (postsError && postsError.code !== '42P01') console.error('Posts fetch error:', postsError)
+
+      const formattedPosts = (postsData || []).map((post: any) => {
+        const likesCount = post.post_likes ? post.post_likes.length : 0
+        const isLiked = user ? post.post_likes?.some((like: any) => like.user_id === user.uid) : false
+
+        return {
+          ...post,
+          likes_count: likesCount,
+          isLiked
+        }
+      })
 
       const { data: storiesData, error: storiesError } = await supabase
         .from('stories')
@@ -43,8 +56,7 @@ export function HomeFeed() {
 
       if (storiesError && storiesError.code !== '42P01') console.error('Stories fetch error:', storiesError)
 
-      // Fallback to empty if table doesn't exist yet (42P01 error code)
-      setPosts(postsData || [])
+      setPosts(formattedPosts)
       setStories(storiesData || [])
     } catch (error) {
       console.error('Error fetching feed:', error)
@@ -57,26 +69,75 @@ export function HomeFeed() {
     fetchFeedData()
   }, [])
 
-  const handleLike = async (postId: string) => {
+  const handleLike = async (postId: string, isDoubleTap = false) => {
     try {
       const user = auth?.currentUser
-      if (!user) return
+      if (!user) {
+        alert("يجب تسجيل الدخول للإعجاب")
+        return
+      }
 
-      // Optimistic update
+      const postIndex = posts.findIndex(p => p.id === postId)
+      if (postIndex === -1) return
+
+      const post = posts[postIndex]
+      const wasLiked = post.isLiked
+
+      // Prevent unliking on double-tap
+      if (isDoubleTap && wasLiked) return
+
+      const isNowLiked = !wasLiked
+
+      // Optimistic UI Update
       setPosts(current =>
-        current.map(p => p.id === postId ? { ...p, likes_count: (p.likes_count || 0) + 1, isLiked: true } : p)
+        current.map(p => {
+          if (p.id === postId) {
+            return {
+              ...p,
+              isLiked: isNowLiked,
+              likes_count: isNowLiked ? (p.likes_count || 0) + 1 : Math.max(0, (p.likes_count || 1) - 1)
+            }
+          }
+          return p
+        })
       )
 
-      await supabase.from('post_likes').insert({ post_id: postId, user_id: user.uid })
+      if (isNowLiked) {
+        // Only celebrate on new like
+        window.dispatchEvent(new CustomEvent('mascot-action', { detail: 'celebrate' }))
+
+        const { error } = await supabase.from('post_likes').insert({ post_id: postId, user_id: user.uid })
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('post_likes')
+          .delete()
+          .eq('post_id', postId)
+          .eq('user_id', user.uid)
+        if (error) throw error
+      }
+
     } catch (error) {
-      console.error('Error liking post:', error)
-      fetchFeedData() // Revert on failure
+      console.error('Error toggling like:', error)
+      fetchFeedData() // Revert on failure by refetching actual state
     }
   }
 
   // Generate fallback UI for when there's no data
   const fallbackStories = ["قصتك", "نورة", "سالم", "ليان", "تركي"]
   const displayStories = stories.length > 0 ? stories : fallbackStories
+
+  // Exploding Heart Animation state
+  const [explodingPostId, setExplodingPostId] = useState<string | null>(null)
+
+  const handleDoubleTap = (postId: string) => {
+    handleLike(postId, true)
+
+    // Trigger animation
+    setExplodingPostId(postId)
+    setTimeout(() => {
+      setExplodingPostId(null)
+    }, 800)
+  }
 
   return (
     <div className="pb-4">
@@ -135,24 +196,63 @@ export function HomeFeed() {
               {post.media_url ? (
                 <motion.div
                   whileHover={{ opacity: 0.95 }}
-                  className="mt-3 aspect-[4/3] w-full rounded-xl border border-border overflow-hidden bg-muted"
+                  onDoubleClick={() => handleDoubleTap(post.id)}
+                  className="mt-3 aspect-[4/3] w-full rounded-xl border border-border overflow-hidden bg-muted relative select-none cursor-pointer"
                 >
                   {post.media_url.match(/\.(mp4|webm|ogg)$/i) ? (
-                     <video src={post.media_url} controls className="size-full object-cover" />
+                     <video src={post.media_url} controls className="size-full object-cover pointer-events-none" />
                   ) : (
-                     <img src={post.media_url} alt="Post media" className="size-full object-cover" />
+                     <img src={post.media_url} alt="Post media" className="size-full object-cover pointer-events-none" />
                   )}
+
+                  {/* Heart Explosion */}
+                  <AnimatePresence>
+                    {explodingPostId === post.id && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.5 }}
+                        animate={{ opacity: 1, scale: 1.2 }}
+                        exit={{ opacity: 0, scale: 1.5 }}
+                        transition={{ duration: 0.5, type: 'spring', damping: 15 }}
+                        className="absolute inset-0 flex items-center justify-center pointer-events-none z-10"
+                      >
+                        <Heart className="size-24 fill-white text-white drop-shadow-2xl" />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </motion.div>
               ) : (
                  <motion.div
                     whileHover={{ opacity: 0.95 }}
-                    className="mt-3 aspect-[4/3] w-full rounded-xl bg-gradient-to-br from-muted to-secondary border border-border"
-                 />
+                    onDoubleClick={() => handleDoubleTap(post.id)}
+                    className="mt-3 aspect-[4/3] w-full rounded-xl bg-gradient-to-br from-muted to-secondary border border-border relative select-none cursor-pointer"
+                 >
+                   {/* Heart Explosion */}
+                   <AnimatePresence>
+                     {explodingPostId === post.id && (
+                       <motion.div
+                         initial={{ opacity: 0, scale: 0.5 }}
+                         animate={{ opacity: 1, scale: 1.2 }}
+                         exit={{ opacity: 0, scale: 1.5 }}
+                         transition={{ duration: 0.5, type: 'spring', damping: 15 }}
+                         className="absolute inset-0 flex items-center justify-center pointer-events-none z-10"
+                       >
+                         <Heart className="size-24 fill-red-500 text-red-500 drop-shadow-2xl" />
+                       </motion.div>
+                     )}
+                   </AnimatePresence>
+                 </motion.div>
               )}
 
               <div className="mt-3 flex items-center gap-5 text-foreground">
                 <ActionButton
-                  icon={<Heart className={`size-5 ${post.isLiked ? 'fill-red-500 text-red-500' : ''}`} />}
+                  icon={
+                    <motion.div
+                      animate={post.isLiked ? { scale: [1, 1.2, 1] } : { scale: [1, 0.9, 1] }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      <Heart className={`size-5 transition-colors ${post.isLiked ? 'fill-red-500 text-red-500' : ''}`} />
+                    </motion.div>
+                  }
                   label={post.likes_count?.toString() || "٠"}
                   onClick={() => handleLike(post.id)}
                 />
