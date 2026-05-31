@@ -67,7 +67,7 @@ export function HomeFeed() {
         current.map(p => p.id === postId ? { ...p, likes_count: (p.likes_count || 0) + 1, isLiked: true } : p)
       )
 
-      await supabase.from('likes').insert({ post_id: postId, user_id: user.uid })
+      await supabase.from('post_likes').insert({ post_id: postId, user_id: user.uid })
     } catch (error) {
       console.error('Error liking post:', error)
       fetchFeedData() // Revert on failure
@@ -165,7 +165,7 @@ export function HomeFeed() {
                       const user = auth?.currentUser;
                       if (!user) return alert("يجب تسجيل الدخول");
                       try {
-                         await supabase.from('comments').insert({ post_id: post.id, user_id: user.uid, text });
+                         await supabase.from('post_comments').insert({ post_id: post.id, user_id: user.uid, text });
                          fetchFeedData();
                       } catch (e) {
                          console.error(e);
