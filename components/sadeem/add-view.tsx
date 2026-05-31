@@ -25,6 +25,7 @@ const item = {
 export function AddView() {
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [errorMsg, setErrorMsg] = useState("")
   const [caption, setCaption] = useState("")
   const [selectedType, setSelectedType] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -40,6 +41,7 @@ export function AddView() {
 
     setLoading(true)
     setSuccess(false)
+    setErrorMsg("")
 
     try {
       const user = auth?.currentUser
@@ -77,9 +79,9 @@ export function AddView() {
       setSuccess(true)
       setCaption("")
       setTimeout(() => setSuccess(false), 3000)
-    } catch (error) {
+    } catch (error: any) {
       console.error("Upload error:", error)
-      alert("حدث خطأ أثناء الرفع")
+      setErrorMsg(error.message || "حدث خطأ غير معروف أثناء الرفع")
     } finally {
       setLoading(false)
       if (fileInputRef.current) fileInputRef.current.value = ""
@@ -175,6 +177,16 @@ export function AddView() {
           </>
         )}
       </motion.button>
+
+      {errorMsg && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-4 text-center"
+        >
+          <p className="text-sm font-medium text-red-500">{errorMsg}</p>
+        </motion.div>
+      )}
     </div>
   )
 }
