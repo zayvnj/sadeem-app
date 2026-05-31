@@ -52,7 +52,7 @@ export function AppShell() {
     return (
       <div className="flex min-h-dvh w-full items-center justify-center bg-secondary p-0 sm:p-6">
         <div className="relative flex h-dvh w-full max-w-md flex-col overflow-hidden sm:h-[860px] sm:rounded-[2.5rem] sm:border-8 sm:shadow-2xl bg-background sm:border-foreground">
-          <AuthView onAuthSuccess={() => {}} />
+          <AuthView />
         </div>
       </div>
     )

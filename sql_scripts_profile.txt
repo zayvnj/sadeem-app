@@ -1,0 +1,53 @@
+-- 1. Create the `users` table
+CREATE TABLE IF NOT EXISTS public.users (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL,
+  username TEXT UNIQUE NOT NULL,
+  full_name TEXT,
+  avatar_url TEXT,
+  bio TEXT,
+  is_verified BOOLEAN DEFAULT false,
+  followers_count INTEGER DEFAULT 0,
+  following_count INTEGER DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT username_length_check CHECK (length(username) >= 4 OR (length(username) >= 1 AND is_verified = true))
+);
+
+-- Ensure RLS is enabled if needed
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+
+-- Note: Policies to allow access to users should be added according to project needs.
+-- For example, allowing anyone to read profiles and users to update their own profile.
+CREATE POLICY "Public profiles are viewable by everyone."
+  ON public.users FOR SELECT
+  USING ( true );
+
+CREATE POLICY "Users can insert their own profile."
+  ON public.users FOR INSERT
+  WITH CHECK ( true );
+
+CREATE POLICY "Users can update own profile."
+  ON public.users FOR UPDATE
+  USING ( true );
+
+-- 2. Create the `avatars` storage bucket
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('avatars', 'avatars', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Storage policies for the 'avatars' bucket
+CREATE POLICY "Avatar images are publicly accessible."
+  ON storage.objects FOR SELECT
+  USING ( bucket_id = 'avatars' );
+
+CREATE POLICY "Anyone can upload an avatar."
+  ON storage.objects FOR INSERT
+  WITH CHECK ( bucket_id = 'avatars' );
+
+CREATE POLICY "Anyone can update an avatar."
+  ON storage.objects FOR UPDATE
+  USING ( bucket_id = 'avatars' );
+
+CREATE POLICY "Anyone can delete an avatar."
+  ON storage.objects FOR DELETE
+  USING ( bucket_id = 'avatars' );
