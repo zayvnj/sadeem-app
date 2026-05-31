@@ -2,13 +2,27 @@
 
 import { useState, useEffect, useRef } from "react"
 import { motion } from "framer-motion"
-import { Settings, Grid3x3, Film, Bookmark, Bell, Moon, Shield, LogOut, Loader2, User, Camera, Trash2, BadgeCheck } from "lucide-react"
+import { Settings, Grid3x3, Film, Bookmark, Bell, Moon, Shield, LogOut, Loader2, User, Camera, Trash2, BadgeCheck, X, ChevronLeft, UserX } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { auth } from "@/lib/firebase"
-import { signOut } from "firebase/auth"
+import { signOut, deleteUser } from "firebase/auth"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { Switch } from "@/components/ui/switch"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import { toast } from "sonner"
 import { compressImage } from "@/lib/utils"
 import { Preferences } from "@capacitor/preferences"
+import { useTheme } from "next-themes"
 
 const tabs = [
   { icon: Grid3x3, key: "grid" },
@@ -16,12 +30,6 @@ const tabs = [
   { icon: Bookmark, key: "saved" },
 ]
 
-const settings = [
-  { icon: Bell, label: "الإشعارات", key: "notifications" },
-  { icon: Moon, label: "المظهر الداكن", key: "theme" },
-  { icon: Shield, label: "الخصوصية والأمان", key: "security" },
-  { icon: LogOut, label: "تسجيل الخروج", key: "logout" },
-]
 
 const container = {
   hidden: { opacity: 0 },
@@ -51,15 +59,22 @@ export function ProfileView() {
   const [editLoading, setEditLoading] = useState(false)
   const [editError, setEditError] = useState("")
 
+  // Settings view states
+  const [activeSettingsView, setActiveSettingsView] = useState<string>("main")
+  const { theme, setTheme } = useTheme()
+
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const fetchProfileData = async () => {
-    if (!currentUser) return
+  const fetchProfileData = async (user: any) => {
+    if (!user) {
+      setLoading(false)
+      return
+    }
     try {
       const { data: profileData, error: profileError } = await supabase
         .from('users')
         .select('*')
-        .eq('id', currentUser.uid)
+        .eq('id', user.uid)
         .single()
 
       if (profileError && profileError.code !== '42P01' && profileError.code !== 'PGRST116') {
@@ -70,7 +85,7 @@ export function ProfileView() {
       const { data: postsData, error: postsError } = await supabase
         .from('posts')
         .select('*')
-        .eq('user_id', currentUser.uid)
+        .eq('user_id', user.uid)
         .order('created_at', { ascending: false })
 
       if (postsError && postsError.code !== '42P01') console.error('Posts fetch error:', postsError)
@@ -83,7 +98,10 @@ export function ProfileView() {
   }
 
   useEffect(() => {
-    fetchProfileData()
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      fetchProfileData(user)
+    })
+    return () => unsubscribe()
   }, [])
 
   // Populate edit form when sheet opens
@@ -202,6 +220,7 @@ export function ProfileView() {
 
       await fetchProfileData()
       setIsEditSheetOpen(false)
+      toast.success("تم حفظ الملف الشخصي بنجاح")
     } catch (e: any) {
       console.error(e)
       setEditError(e.message || "حدث خطأ غير متوقع")
@@ -210,14 +229,56 @@ export function ProfileView() {
     }
   }
 
+  const handleToggleSetting = async (key: string, value: boolean) => {
+    if (!currentUser) return
+
+    // Optimistic update locally
+    setProfile((prev: any) => ({ ...prev, [key]: value }))
+
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ [key]: value })
+        .eq('id', currentUser.uid)
+
+      if (error) throw error
+    } catch (err) {
+      console.error('Error updating setting:', err)
+      toast.error('فشل في حفظ الإعدادات')
+      // Revert optimistic update
+      setProfile((prev: any) => ({ ...prev, [key]: !value }))
+    }
+  }
+
   const handleLogout = async () => {
     try {
       await signOut(auth)
       await Preferences.clear()
       localStorage.clear()
+      toast.success("تم تسجيل الخروج")
       // AppShell will automatically render AuthView when auth state changes to null
     } catch (error) {
       console.error('Error signing out:', error)
+      toast.error("حدث خطأ أثناء تسجيل الخروج")
+    }
+  }
+
+  const handleDeleteAccount = async () => {
+    try {
+      if (!currentUser) return
+
+      // Delete user data from supabase
+      const { error } = await supabase.from('users').delete().eq('id', currentUser.uid)
+      if (error) throw error
+
+      // Delete auth account
+      await deleteUser(currentUser)
+      await Preferences.clear()
+      localStorage.clear()
+      toast.success("تم حذف الحساب بنجاح")
+    } catch (err) {
+      console.error('Error deleting account:', err)
+      toast.error("حدث خطأ أثناء محاولة حذف الحساب. قد تحتاج لتسجيل الدخول مجدداً لأسباب أمنية.")
     }
   }
 
@@ -248,28 +309,129 @@ export function ProfileView() {
         </h2>
 
         {/* Settings Dropdown/Sheet could go here, but for now just the icon */}
-        <Sheet>
+        <Sheet onOpenChange={(open) => {
+          if (!open) setTimeout(() => setActiveSettingsView("main"), 300)
+        }}>
           <SheetTrigger asChild>
             <button aria-label="الإعدادات" className="text-foreground">
               <Settings className="size-6" />
             </button>
           </SheetTrigger>
-          <SheetContent side="bottom" className="h-[auto] rounded-t-3xl pb-8" dir="rtl">
-            <SheetHeader>
-              <SheetTitle>الإعدادات</SheetTitle>
-            </SheetHeader>
-            <div className="mt-4 flex flex-col gap-2">
-              {settings.map((s, i) => (
-                <button
-                  key={s.label}
-                  onClick={s.key === 'logout' ? handleLogout : undefined}
-                  className={`flex w-full items-center gap-3 px-4 py-3 text-right transition-colors hover:bg-secondary rounded-xl ${s.key === 'logout' ? 'text-red-500' : ''}`}
-                >
-                  <s.icon className={`size-5 ${s.key === 'logout' ? 'text-red-500' : 'text-muted-foreground'}`} />
-                  <span className="text-sm font-medium">{s.label}</span>
-                </button>
-              ))}
-            </div>
+          <SheetContent side="bottom" className="h-[85vh] rounded-t-3xl overflow-y-auto" dir="rtl">
+            {activeSettingsView === "main" && (
+              <>
+                <SheetHeader className="mb-4">
+                  <SheetTitle className="text-center">الإعدادات</SheetTitle>
+                </SheetHeader>
+                <div className="flex flex-col gap-2">
+                  <button onClick={() => setActiveSettingsView("notifications")} className="flex w-full items-center justify-between px-4 py-3 hover:bg-secondary rounded-xl transition-colors">
+                    <div className="flex items-center gap-3">
+                      <Bell className="size-5 text-muted-foreground" />
+                      <span className="text-sm font-medium">الإشعارات</span>
+                    </div>
+                    <ChevronLeft className="size-5 text-muted-foreground" />
+                  </button>
+
+                  <div className="flex w-full items-center justify-between px-4 py-3 hover:bg-secondary rounded-xl transition-colors">
+                    <div className="flex items-center gap-3">
+                      <Moon className="size-5 text-muted-foreground" />
+                      <span className="text-sm font-medium">المظهر الداكن</span>
+                    </div>
+                    <Switch
+                      dir="ltr"
+                      checked={theme === "dark"}
+                      onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
+                    />
+                  </div>
+
+                  <button onClick={() => setActiveSettingsView("privacy")} className="flex w-full items-center justify-between px-4 py-3 hover:bg-secondary rounded-xl transition-colors">
+                    <div className="flex items-center gap-3">
+                      <Shield className="size-5 text-muted-foreground" />
+                      <span className="text-sm font-medium">الخصوصية والأمان</span>
+                    </div>
+                    <ChevronLeft className="size-5 text-muted-foreground" />
+                  </button>
+
+                  <div className="h-px bg-border my-2" />
+
+                  <button onClick={handleLogout} className="flex w-full items-center gap-3 px-4 py-3 text-red-500 hover:bg-red-500/10 rounded-xl transition-colors">
+                    <LogOut className="size-5" />
+                    <span className="text-sm font-medium">تسجيل الخروج</span>
+                  </button>
+                </div>
+              </>
+            )}
+
+            {activeSettingsView === "notifications" && (
+              <motion.div initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="flex flex-col gap-4">
+                <SheetHeader className="mb-4 flex flex-row items-center justify-between">
+                  <button onClick={() => setActiveSettingsView("main")} className="p-2"><ChevronLeft className="size-5 rotate-180" /></button>
+                  <SheetTitle className="m-0">الإشعارات</SheetTitle>
+                  <div className="w-9" />
+                </SheetHeader>
+                <div className="space-y-4 px-2">
+                  <div className="flex items-center justify-between">
+                     <span className="text-sm font-medium">الإشعارات العامة</span>
+                     <Switch dir="ltr" checked={profile?.notify_general ?? true} onCheckedChange={(val) => handleToggleSetting('notify_general', val)} />
+                  </div>
+                  <div className="flex items-center justify-between">
+                     <span className="text-sm font-medium">الإعجابات</span>
+                     <Switch dir="ltr" checked={profile?.notify_likes ?? true} onCheckedChange={(val) => handleToggleSetting('notify_likes', val)} />
+                  </div>
+                  <div className="flex items-center justify-between">
+                     <span className="text-sm font-medium">التعليقات</span>
+                     <Switch dir="ltr" checked={profile?.notify_comments ?? true} onCheckedChange={(val) => handleToggleSetting('notify_comments', val)} />
+                  </div>
+                  <div className="flex items-center justify-between">
+                     <span className="text-sm font-medium">المتابعون الجدد</span>
+                     <Switch dir="ltr" checked={profile?.notify_follows ?? true} onCheckedChange={(val) => handleToggleSetting('notify_follows', val)} />
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {activeSettingsView === "privacy" && (
+              <motion.div initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="flex flex-col gap-4">
+                <SheetHeader className="mb-4 flex flex-row items-center justify-between">
+                  <button onClick={() => setActiveSettingsView("main")} className="p-2"><ChevronLeft className="size-5 rotate-180" /></button>
+                  <SheetTitle className="m-0">الخصوصية</SheetTitle>
+                  <div className="w-9" />
+                </SheetHeader>
+                <div className="space-y-4 px-2">
+                  <div className="flex items-center justify-between">
+                     <span className="text-sm font-medium">حساب خاص</span>
+                     <Switch dir="ltr" checked={profile?.is_private ?? false} onCheckedChange={(val) => handleToggleSetting('is_private', val)} />
+                  </div>
+                  <div className="flex items-center justify-between">
+                     <span className="text-sm font-medium">السماح بالتعليقات</span>
+                     <Switch dir="ltr" checked={profile?.allow_comments ?? true} onCheckedChange={(val) => handleToggleSetting('allow_comments', val)} />
+                  </div>
+
+                  <div className="h-px bg-border my-6" />
+
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <button className="flex w-full items-center gap-3 px-2 py-3 text-red-500 hover:bg-red-500/10 rounded-xl transition-colors mt-8">
+                        <UserX className="size-5" />
+                        <span className="text-sm font-bold">حذف الحساب نهائياً</span>
+                      </button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent dir="rtl">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>هل أنت متأكد من حذف الحساب؟</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          هذا الإجراء لا يمكن التراجع عنه. سيتم حذف جميع بياناتك ومنشوراتك وإعجاباتك بشكل نهائي من خوادمنا.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter className="flex-row gap-2 sm:justify-start">
+                        <AlertDialogCancel className="mt-0">إلغاء</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDeleteAccount} className="bg-red-500 hover:bg-red-600">نعم، احذف حسابي</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </motion.div>
+            )}
           </SheetContent>
         </Sheet>
       </div>
@@ -404,8 +566,9 @@ export function ProfileView() {
         <button
           className="flex-1 rounded-lg border border-border py-2 text-sm font-semibold hover:bg-secondary active:scale-95 transition-all"
           onClick={() => {
-             // Fake share for now
-             alert("تم نسخ رابط الملف الشخصي!");
+             navigator.clipboard.writeText(window.location.href)
+               .then(() => toast.success("تم نسخ رابط الملف الشخصي!"))
+               .catch(() => toast.error("حدث خطأ أثناء النسخ"))
           }}
         >
           مشاركة الملف
