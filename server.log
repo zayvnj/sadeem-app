@@ -1,8 +1,36 @@
 
-> my-project@0.1.0 start
-> next start
+> my-project@0.1.0 dev
+> next dev
 
-▲ Next.js 16.2.6
+▲ Next.js 16.2.6 (Turbopack)
 - Local:         http://localhost:3000
 - Network:       http://192.168.0.2:3000
-✓ Ready in 174ms
+✓ Ready in 536ms
+
+○ Compiling / ...
+Failed to initialize Firebase Auth Error [FirebaseError]: Firebase: Error (auth/invalid-api-key).
+    at module evaluation (lib/firebase.ts:19:17)
+    at module evaluation (components/sadeem/app-shell.tsx:7:1)
+  17 | try {
+  18 |   app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+> 19 |   auth = getAuth(app);
+     |                 ^
+  20 | } catch (error) {
+  21 |   console.warn("Failed to initialize Firebase Auth", error);
+  22 | } {
+  code: 'auth/invalid-api-key',
+  customData: { appName: '[DEFAULT]' }
+}
+Supabase env vars missing, using placeholder credentials for build.
+ GET / 200 in 6.0s (next.js: 4.9s, application-code: 1096ms)
+[browser] Failed to initialize Firebase Auth FirebaseError: Firebase: Error (auth/invalid-api-key).
+    at module evaluation (lib/firebase.ts:19:17)
+    at module evaluation (components/sadeem/app-shell.tsx:7:1)
+  17 | try {
+  18 |   app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+> 19 |   auth = getAuth(app);
+     |                 ^
+  20 | } catch (error) {
+  21 |   console.warn("Failed to initialize Firebase Auth", error);
+  22 | } (lib/firebase.ts:21:11)
+[browser] Supabase env vars missing, using placeholder credentials for build. (lib/supabase.ts:7:11)
