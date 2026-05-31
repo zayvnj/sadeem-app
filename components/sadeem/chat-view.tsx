@@ -80,7 +80,7 @@ export function ChatView() {
         // Fetch latest message
         const { data: msgData } = await supabase
           .from('messages')
-          .select('text, created_at')
+          .select('content, created_at')
           .eq('chat_id', chat.id)
           .order('created_at', { ascending: false })
           .limit(1)
@@ -89,7 +89,7 @@ export function ChatView() {
         return {
           id: chat.id,
           user: userData || { id: otherParticipantId, full_name: 'مستخدم غير معروف' },
-          lastMessage: msgData?.text || 'لا توجد رسائل',
+          lastMessage: msgData?.content || 'لا توجد رسائل',
           lastMessageTime: msgData?.created_at,
           unread: 0 // Mock for now
         }
@@ -229,7 +229,7 @@ export function ChatView() {
       id: Date.now().toString(),
       chat_id: activeChat.id,
       sender_id: currentUser.uid,
-      text: newMessage,
+      content: newMessage,
       created_at: new Date().toISOString()
     }
 
@@ -240,7 +240,7 @@ export function ChatView() {
       await supabase.from('messages').insert({
         chat_id: activeChat.id,
         sender_id: currentUser.uid,
-        text: tempMessage.text
+        content: tempMessage.content
       })
     } catch (error) {
       console.error('Error sending message:', error)
@@ -276,7 +276,7 @@ export function ChatView() {
               return (
                 <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[75%] rounded-2xl px-4 py-2 text-sm ${isMe ? 'bg-foreground text-background rounded-tl-sm' : 'bg-secondary text-foreground rounded-tr-sm'}`}>
-                    {msg.text}
+                    {msg.content}
                   </div>
                 </div>
               )
