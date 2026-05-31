@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Heart, MessageCircle, Send, Music2, Play, Volume2, VolumeX, Loader2 } from "lucide-react"
+import { Heart, MessageCircle, Send, Music2, Play, Volume2, VolumeX, Loader2, BadgeCheck } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { auth } from "@/lib/firebase"
 
@@ -16,7 +16,7 @@ export function ReelsView() {
 
       const { data, error } = await supabase
         .from('posts')
-        .select('*, post_likes(user_id)')
+        .select('*, users:user_id(id, full_name, username, avatar_url, is_verified), post_likes(user_id)')
         .not('media_url', 'is', null)
         .eq('type', 'reel')
         .order('created_at', { ascending: false })
@@ -29,7 +29,7 @@ export function ReelsView() {
           // Fallback query matching extensions
           const fallbackQuery = await supabase
             .from('posts')
-            .select('*, post_likes(user_id)')
+            .select('*, users:user_id(id, full_name, username, avatar_url, is_verified), post_likes(user_id)')
             .not('media_url', 'is', null)
             .like('media_url', '%.mp4')
             .order('created_at', { ascending: false })
@@ -311,10 +311,22 @@ function ReelItem({ reel, handleLike, index }: { reel: any, handleLike: (id: str
       </div>
 
       {/* Caption */}
-      <div className="absolute bottom-24 right-4 left-20 text-white z-30 pointer-events-none">
-        <p className="text-sm font-bold">@{reel.user_id?.substring(0,8) || "مستخدم"}</p>
-        <p className="mt-1.5 text-sm leading-relaxed text-pretty text-white/90">{reel.text || reel.caption || ""}</p>
-        <div className="mt-3 flex items-center gap-2 text-xs text-white/80">
+      <div className="absolute bottom-24 right-4 left-20 text-white z-30 pointer-events-none flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          {reel.users?.avatar_url ? (
+            <img src={reel.users.avatar_url} alt="" className="size-8 rounded-full object-cover" />
+          ) : (
+            <div className="size-8 rounded-full bg-white/20 flex items-center justify-center font-bold text-white text-xs">
+              {(reel.users?.full_name || reel.users?.username || 'م').charAt(0)}
+            </div>
+          )}
+          <p className="text-sm font-bold flex items-center gap-1 drop-shadow-md">
+            {reel.users?.full_name || reel.users?.username || `@${reel.user_id?.substring(0,8)}`}
+            {reel.users?.is_verified && <BadgeCheck className="size-4 text-blue-400 drop-shadow-sm" />}
+          </p>
+        </div>
+        <p className="text-sm leading-relaxed text-pretty text-white/90 drop-shadow-md">{reel.text || reel.caption || ""}</p>
+        <div className="mt-1 flex items-center gap-2 text-xs text-white/80 drop-shadow-md">
           <Music2 className="size-4" />
           <span className="truncate">الصوت الأصلي</span>
         </div>

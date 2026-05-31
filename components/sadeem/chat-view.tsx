@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Sparkles, Search, Send, ArrowRight, Loader2 } from "lucide-react"
+import { Sparkles, Search, Send, ArrowRight, Loader2, BadgeCheck } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { auth } from "@/lib/firebase"
 
@@ -73,7 +73,7 @@ export function ChatView() {
         // Fetch user details
         const { data: userData } = await supabase
           .from('users')
-          .select('id, full_name, username, avatar_url')
+          .select('id, full_name, username, avatar_url, is_verified')
           .eq('id', otherParticipantId)
           .single()
 
@@ -119,7 +119,7 @@ export function ChatView() {
 
       const { data, error } = await supabase
         .from('users')
-        .select('id, full_name, username, avatar_url')
+        .select('id, full_name, username, avatar_url, is_verified')
         .ilike('username', `%${searchQuery}%`)
         .neq('id', currentUser?.uid)
         .limit(5)
@@ -274,7 +274,10 @@ export function ChatView() {
             </div>
           )}
           <div className="flex flex-col">
-            <span className="font-semibold text-sm">{activeChat.user?.full_name || activeChat.user?.username || `مستخدم`}</span>
+            <span className="font-semibold text-sm flex items-center gap-1">
+              {activeChat.user?.full_name || activeChat.user?.username || `مستخدم`}
+              {activeChat.user?.is_verified && <BadgeCheck className="size-4 text-blue-500" />}
+            </span>
             <span className="text-xs text-green-500">متصل الآن</span>
           </div>
         </div>
@@ -345,7 +348,10 @@ export function ChatView() {
                   </div>
                 )}
                 <div className="flex flex-col">
-                  <span className="text-sm font-semibold">{user.full_name || user.username}</span>
+                  <span className="text-sm font-semibold flex items-center gap-1">
+                    {user.full_name || user.username}
+                    {user.is_verified && <BadgeCheck className="size-4 text-blue-500" />}
+                  </span>
                   <span className="text-xs text-muted-foreground">@{user.username}</span>
                 </div>
               </button>
@@ -398,7 +404,10 @@ export function ChatView() {
                     )}
                     <span className="flex-1">
                       <span className="flex items-center justify-between">
-                        <span className="text-sm font-semibold">{name}</span>
+                        <span className="text-sm font-semibold flex items-center gap-1">
+                          {name}
+                          {chat.user.is_verified && <BadgeCheck className="size-4 text-blue-500" />}
+                        </span>
                         <span className="text-xs text-muted-foreground">{timeString}</span>
                       </span>
                       <span className="mt-0.5 flex items-center justify-between gap-2">

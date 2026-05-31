@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Loader2 } from "lucide-react"
+import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Loader2, BadgeCheck } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { auth } from "@/lib/firebase"
 
@@ -31,7 +31,7 @@ export function HomeFeed() {
       // Fetch posts
       const { data: postsData, error: postsError } = await supabase
         .from('posts')
-        .select('*, post_likes(user_id)')
+        .select('*, users:user_id(id, full_name, username, avatar_url, is_verified), post_likes(user_id)')
         .order('created_at', { ascending: false })
         .limit(10)
 
@@ -179,12 +179,19 @@ export function HomeFeed() {
           {posts.length > 0 ? posts.map((post) => (
             <motion.article key={post.id} variants={item} className="border-b border-border px-4 py-4">
               <div className="flex items-center gap-3">
-                <div className="size-10 rounded-full bg-muted flex items-center justify-center font-semibold text-muted-foreground overflow-hidden">
-                   {post.user_id?.charAt(0) || 'م'}
-                </div>
+                {post.users?.avatar_url ? (
+                  <img src={post.users.avatar_url} alt="" className="size-10 rounded-full object-cover" />
+                ) : (
+                  <div className="size-10 rounded-full bg-muted flex items-center justify-center font-semibold text-muted-foreground overflow-hidden">
+                    {(post.users?.full_name || post.users?.username || 'م').charAt(0)}
+                  </div>
+                )}
                 <div className="flex-1">
-                  <p className="text-sm font-semibold leading-tight">مستخدم سديم</p>
-                  <p className="text-xs text-muted-foreground">@{post.user_id?.substring(0,6) || 'user'} · الآن</p>
+                  <p className="text-sm font-semibold leading-tight flex items-center gap-1">
+                    {post.users?.full_name || post.users?.username || 'مستخدم سديم'}
+                    {post.users?.is_verified && <BadgeCheck className="size-4 text-blue-500" />}
+                  </p>
+                  <p className="text-xs text-muted-foreground">@{post.users?.username || post.user_id?.substring(0,6)} · الآن</p>
                 </div>
                 <button className="text-muted-foreground" aria-label="خيارات">
                   <MoreHorizontal className="size-5" />
