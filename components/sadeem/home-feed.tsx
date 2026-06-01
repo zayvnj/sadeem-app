@@ -1,12 +1,11 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Loader2, BadgeCheck, Plus } from "lucide-react"
+import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Loader2, BadgeCheck } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { auth } from "@/lib/firebase"
 import { useNavigation } from "./navigation-context"
-import { StoryViewer } from "./story-viewer"
 
 const container = {
   hidden: { opacity: 0 },
@@ -24,9 +23,7 @@ const item = {
 export function HomeFeed() {
   const [posts, setPosts] = useState<any[]>([])
   const [stories, setStories] = useState<any[]>([])
-  const [storyViews, setStoryViews] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
-  const [viewerState, setViewerState] = useState<{ isOpen: boolean; initialIndex: number }>({ isOpen: false, initialIndex: 0 })
   const { setSelectedUserId } = useNavigation()
 
   const fetchFeedData = async () => {
@@ -76,36 +73,22 @@ export function HomeFeed() {
         }
       })
 
-      // Fetch Stories (last 24 hours only)
-      const yesterday = new Date()
-      yesterday.setDate(yesterday.getDate() - 1)
-
       let storiesQuery = supabase
         .from('stories')
         .select('*, users:user_id(id, full_name, username, avatar_url, is_verified)')
-        .gte('created_at', yesterday.toISOString())
         .order('created_at', { ascending: false })
+        .limit(10)
 
       if (user && followedIds.length > 0) {
         storiesQuery = storiesQuery.in('user_id', followedIds)
       }
 
       const { data: storiesData, error: storiesError } = await storiesQuery
-      if (storiesError && storiesError.code !== '42P01') console.error('Stories fetch error:', storiesError)
 
-      let viewsData: any[] = []
-      if (user && storiesData && storiesData.length > 0) {
-        const { data: vData } = await supabase
-          .from('story_views')
-          .select('story_id')
-          .eq('viewer_id', user.uid)
-          .in('story_id', storiesData.map(s => s.id))
-        viewsData = vData || []
-      }
+      if (storiesError && storiesError.code !== '42P01') console.error('Stories fetch error:', storiesError)
 
       setPosts(formattedPosts)
       setStories(storiesData || [])
-      setStoryViews(new Set(viewsData.map(v => v.story_id)))
     } catch (error) {
       console.error('Error fetching feed:', error)
     } finally {
@@ -166,109 +149,13 @@ export function HomeFeed() {
 
     } catch (error) {
       console.error('Error toggling like:', error)
-      fetchFeedData()
+      fetchFeedData() // Revert on failure by refetching actual state
     }
   }
 
-  const handleStoryUpload = async () => {
-    const user = auth?.currentUser
-    if (!user) return alert("يجب تسجيل الدخول")
-
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = 'image/*,video/*'
-    input.onchange = async (e: any) => {
-      const file = e.target.files?.[0]
-      if (!file) return
-
-      try {
-        const fileExt = file.name.split('.').pop()
-        const fileName = `${Math.random()}.${fileExt}`
-        const filePath = `stories/${fileName}`
-
-        const { error: uploadError } = await supabase.storage
-          .from('media')
-          .upload(filePath, file)
-
-        if (uploadError) throw uploadError
-
-        const { data: urlData } = supabase.storage
-          .from('media')
-          .getPublicUrl(filePath)
-
-        const { error: insertError } = await supabase.from('stories').insert({
-          user_id: user.uid,
-          media_url: urlData.publicUrl
-        })
-
-        if (insertError) throw insertError
-
-        fetchFeedData() // Refresh stories
-      } catch (error) {
-        console.error('Error uploading story:', error)
-        alert('حدث خطأ أثناء رفع القصة')
-      }
-    }
-    input.click()
-  }
-
-  // Keep the viewer logic separated from the reshuffling Home Feed array by freezing the current viewer data context
-  // Group stories by user
-  const groupedStories = useMemo(() => {
-    const user = auth?.currentUser
-    const groups = new Map<string, any[]>()
-
-    stories.forEach(story => {
-      if (!groups.has(story.user_id)) {
-        groups.set(story.user_id, [])
-      }
-      groups.get(story.user_id)!.push(story)
-    })
-
-    const finalGroups: { user_id: string, user: any, stories: any[], allSeen: boolean, latestDate: number }[] = []
-
-    groups.forEach((userStories, userId) => {
-      // Check if all stories for this user are seen
-      const allSeen = userId === user?.uid ? true : userStories.every(s => storyViews.has(s.id))
-      // Sort stories for this user oldest to newest (to view in order)
-      const sortedStories = [...userStories].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-
-      finalGroups.push({
-        user_id: userId,
-        user: sortedStories[0].users,
-        stories: sortedStories,
-        allSeen,
-        latestDate: new Date(sortedStories[sortedStories.length - 1].created_at).getTime()
-      })
-    })
-
-    // Sort groups: Current user first -> Unseen -> Seen (newest to oldest within groups)
-    return finalGroups.sort((a, b) => {
-      if (user && a.user_id === user.uid) return -1
-      if (user && b.user_id === user.uid) return 1
-      if (a.allSeen === b.allSeen) return b.latestDate - a.latestDate
-      return a.allSeen ? 1 : -1
-    })
-  }, [stories, storyViews])
-
-  // Flatten for viewer
-  const viewerStories = useMemo(() => {
-    return groupedStories.flatMap(g => g.stories)
-  }, [groupedStories])
-
-  const [frozenViewerStories, setFrozenViewerStories] = useState<any[]>([])
-
-  const openStoryViewer = (userId: string) => {
-    // Freeze the current state of stories so it doesn't shuffle around while the user is viewing
-    const currentStories = viewerStories;
-    setFrozenViewerStories(currentStories)
-    const index = currentStories.findIndex(s => s.user_id === userId)
-    if (index !== -1) {
-      setViewerState({ isOpen: true, initialIndex: index })
-    }
-  }
-
-  const currentUserGroup = groupedStories.find(g => g.user_id === auth?.currentUser?.uid)
+  // Generate fallback UI for when there's no data
+  const fallbackStories = ["قصتك", "نورة", "سالم", "ليان", "تركي"]
+  const displayStories = stories.length > 0 ? stories : fallbackStories
 
   // Exploding Heart Animation state
   const [explodingPostId, setExplodingPostId] = useState<string | null>(null)
@@ -285,23 +172,6 @@ export function HomeFeed() {
 
   return (
     <div className="pb-4">
-      <AnimatePresence>
-        {viewerState.isOpen && (
-          <StoryViewer
-            stories={frozenViewerStories}
-            initialIndex={viewerState.initialIndex}
-            onClose={() => setViewerState({ isOpen: false, initialIndex: 0 })}
-            onStoryViewed={(storyId) => {
-              setStoryViews(prev => {
-                const newSet = new Set(prev)
-                newSet.add(storyId)
-                return newSet
-              })
-            }}
-          />
-        )}
-      </AnimatePresence>
-
       {/* Stories */}
       <motion.div
         variants={container}
@@ -309,56 +179,28 @@ export function HomeFeed() {
         animate="show"
         className="flex gap-4 overflow-x-auto px-4 py-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        {/* Current User Story Bubble */}
-        <motion.div variants={item} className="flex flex-col items-center gap-1.5 shrink-0 relative cursor-pointer">
-          <div
-             className={`rounded-full p-[2px] ${currentUserGroup ? 'bg-gradient-to-tr from-muted to-muted-foreground' : ''}`}
-             onClick={() => currentUserGroup ? openStoryViewer(currentUserGroup.user_id) : handleStoryUpload()}
-          >
-            <div className="size-16 rounded-full bg-muted flex items-center justify-center overflow-hidden border-2 border-background">
-              {auth?.currentUser?.photoURL ? (
-                <img src={auth.currentUser.photoURL} alt="Your Story" className="size-full object-cover" />
-              ) : (
-                <span className="text-lg font-semibold text-muted-foreground">أنت</span>
-              )}
-            </div>
-          </div>
-          {!currentUserGroup && (
-             <div
-               className="absolute bottom-5 right-0 bg-primary text-primary-foreground rounded-full p-0.5 border-2 border-background cursor-pointer shadow-sm"
-               onClick={handleStoryUpload}
-             >
-               <Plus className="size-3" />
-             </div>
-          )}
-          <span className="text-xs text-muted-foreground">قصتك</span>
-        </motion.div>
-
-        {groupedStories.filter(g => g.user_id !== auth?.currentUser?.uid).map((group) => {
-          const name = group.user?.username || group.user?.full_name || 'مستخدم'
-          const ringClass = group.allSeen
-             ? 'bg-muted'
-             : 'bg-gradient-to-tr from-yellow-400 via-red-500 to-pink-500'
+        {displayStories.map((story, i) => {
+          const name = typeof story === 'string' ? story : (story.users?.username || story.users?.full_name || 'مستخدم')
+          const isRealStory = typeof story !== 'string'
+          const userId = isRealStory ? story.user_id : null
 
           return (
             <motion.div
-              key={group.user_id}
+              key={isRealStory ? story.id : name}
               variants={item}
               className="flex flex-col items-center gap-1.5 shrink-0 cursor-pointer"
-              onClick={() => openStoryViewer(group.user_id)}
+              onClick={() => userId && setSelectedUserId(userId)}
             >
-              <div className={`rounded-full p-[2px] ${ringClass}`}>
-                <div className="size-16 rounded-full bg-background flex items-center justify-center overflow-hidden border-2 border-background">
-                  {group.user?.avatar_url ? (
-                    <img src={group.user.avatar_url} alt={name} className="size-full object-cover" />
+              <div className="rounded-full p-[2px] ring-2 ring-foreground">
+                <div className="size-16 rounded-full bg-muted flex items-center justify-center overflow-hidden text-lg font-semibold text-muted-foreground">
+                  {isRealStory && story.users?.avatar_url ? (
+                    <img src={story.users.avatar_url} alt="Story" className="size-full object-cover" />
                   ) : (
-                    <span className="text-lg font-semibold text-muted-foreground">{name.charAt(0)}</span>
+                    name.charAt(0)
                   )}
                 </div>
               </div>
-              <span className={`text-xs max-w-16 truncate ${group.allSeen ? 'text-muted-foreground' : 'text-foreground font-medium'}`}>
-                {name}
-              </span>
+              <span className="text-xs text-muted-foreground max-w-16 truncate">{name}</span>
             </motion.div>
           )
         })}

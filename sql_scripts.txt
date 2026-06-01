@@ -46,30 +46,3 @@ CREATE TABLE IF NOT EXISTS follows (
 
 ALTER TABLE follows ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow all operations for testing" ON follows FOR ALL USING (true) WITH CHECK (true);
--- Stories Table
-CREATE TABLE IF NOT EXISTS stories (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  media_url TEXT NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
-ALTER TABLE stories ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow all operations for testing" ON stories;
-CREATE POLICY "Allow all operations for testing" ON stories FOR ALL USING (true) WITH CHECK (true);
-
--- Story Views Table
-CREATE TABLE IF NOT EXISTS story_views (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  story_id UUID NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
-  viewer_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-  UNIQUE(story_id, viewer_id)
-);
-
-ALTER TABLE story_views ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow all operations for testing" ON story_views FOR ALL USING (true) WITH CHECK (true);
-
--- Modify messages table
-ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_media_url TEXT;
-ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_story_id UUID REFERENCES stories(id) ON DELETE SET NULL;
