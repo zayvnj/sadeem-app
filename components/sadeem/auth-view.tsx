@@ -47,7 +47,12 @@ export function AuthView() {
         setMessage("تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني.")
       }
     } catch (err: any) {
-      setError(err.message || "حدث خطأ ما")
+      const code = err?.code || "";
+      if (code === "auth/invalid-credential") setError("البريد الإلكتروني أو كلمة المرور غير صحيحة");
+      else if (code === "auth/email-already-in-use") setError("هذا البريد الإلكتروني مسجل مسبقاً");
+      else if (code === "auth/weak-password") setError("كلمة المرور ضعيفة جداً");
+      else if (code === "auth/network-request-failed") setError("تأكد من اتصالك بالإنترنت");
+      else setError("حدث خطأ غير معروف، يرجى المحاولة مجدداً");
     } finally {
       setLoading(false)
     }
@@ -61,9 +66,26 @@ export function AuthView() {
       let userCred;
       if (Capacitor.isNativePlatform()) {
         console.log("[Google Auth] Step 2a: Running in native platform (Capacitor)");
-        const result = await FirebaseAuthentication.signInWithGoogle({ clientId: "555021067416-rc294q6e039nbbe1r02ueeub4o3jnk7d.apps.googleusercontent.com" })
-        console.log("[Google Auth] Step 3a: Result from FirebaseAuthentication plugin:", result);
-        if (result.credential?.idToken) {
+
+        let result;
+        const googleClientId = "555021067416-rc294q6e039nbbe1r02ueeub4o3jnk7d.apps.googleusercontent.com";
+        const options: any = {
+          clientId: googleClientId,
+          serverClientId: googleClientId,
+          webClientId: googleClientId,
+        };
+
+        try {
+          console.log("[Google Auth] Step 3a: Attempting signInWithGoogle (Credential Manager/One Tap)");
+          result = await FirebaseAuthentication.signInWithGoogle(options);
+        } catch (initialErr: any) {
+          console.log("[Google Auth] Step 3b: Initial attempt failed, falling back to standard intent", initialErr);
+          options.useCredentialManager = false;
+          result = await FirebaseAuthentication.signInWithGoogle(options);
+        }
+
+        console.log("[Google Auth] Step 4a: Result from FirebaseAuthentication plugin:", result);
+        if (result?.credential?.idToken) {
           console.log("[Google Auth] Step 4a: Using idToken to create Google credential");
           const credential = GoogleAuthProvider.credential(result.credential.idToken)
           console.log("[Google Auth] Step 5a: Signing in with credential");
@@ -109,11 +131,16 @@ export function AuthView() {
 
     } catch (err: any) {
       console.error("[Google Auth] Catch Block Error:", err)
-      const errorCode = err.code || "UNKNOWN_CODE"
-      const errorMessage = err.message || "An unknown error occurred"
+      const code = err?.code || "UNKNOWN_CODE";
 
-      toast.error(`Google Auth Error: ${errorCode} - ${errorMessage}`)
-      setError(errorMessage)
+      let friendlyMessage = "حدث خطأ غير معروف، يرجى المحاولة مجدداً";
+      if (code === "auth/invalid-credential") friendlyMessage = "البريد الإلكتروني أو كلمة المرور غير صحيحة";
+      else if (code === "auth/email-already-in-use") friendlyMessage = "هذا البريد الإلكتروني مسجل مسبقاً";
+      else if (code === "auth/weak-password") friendlyMessage = "كلمة المرور ضعيفة جداً";
+      else if (code === "auth/network-request-failed") friendlyMessage = "تأكد من اتصالك بالإنترنت";
+
+      toast.error(friendlyMessage)
+      setError(friendlyMessage)
     } finally {
       console.log("[Google Auth] Finally Block: Process finished");
       setLoading(false)
