@@ -17,25 +17,15 @@ android {
         }
     }
     signingConfigs {
-        def keystoreFile = file("sadeem-upload-key.jks")
         release {
+            def keystoreFile = file("sadeem-release-key.jks")
             if (keystoreFile.exists()) {
                 storeFile keystoreFile
-                storePassword "sadeem123"
-                keyAlias "sadeem"
-                keyPassword "sadeem123"
+                storePassword System.getenv("KEYSTORE_PASSWORD")
+                keyAlias System.getenv("KEY_ALIAS")
+                keyPassword System.getenv("KEYSTORE_PASSWORD")
             } else {
-                logger.warn("Custom keystore 'sadeem-upload-key.jks' not found. Falling back to default configuration for release.")
-            }
-        }
-        debug {
-            if (keystoreFile.exists()) {
-                storeFile keystoreFile
-                storePassword "sadeem123"
-                keyAlias "sadeem"
-                keyPassword "sadeem123"
-            } else {
-                logger.warn("Custom keystore 'sadeem-upload-key.jks' not found. Falling back to default configuration for debug.")
+                logger.warn("Custom keystore 'sadeem-release-key.jks' not found. You need this to build a release APK.")
             }
         }
     }
@@ -44,9 +34,6 @@ android {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.release
-        }
-        debug {
-            signingConfig signingConfigs.debug
         }
     }
 }
