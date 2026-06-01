@@ -61,7 +61,7 @@ export function AuthView() {
       let userCred;
       if (Capacitor.isNativePlatform()) {
         console.log("[Google Auth] Step 2a: Running in native platform (Capacitor)");
-        const result = await FirebaseAuthentication.signInWithGoogle()
+        const result = await FirebaseAuthentication.signInWithGoogle({ clientId: "555021067416-rc294q6e039nbbe1r02ueeub4o3jnk7d.apps.googleusercontent.com" })
         console.log("[Google Auth] Step 3a: Result from FirebaseAuthentication plugin:", result);
         if (result.credential?.idToken) {
           console.log("[Google Auth] Step 4a: Using idToken to create Google credential");
