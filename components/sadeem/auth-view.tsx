@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { Mail, Lock, User, ArrowRight, Chrome } from "lucide-react"
 import { Capacitor } from "@capacitor/core"
 import { toast } from "sonner"
+import { Logo } from "./logo"
 import { FirebaseAuthentication } from "@capacitor-firebase/authentication"
 import { auth } from "../../lib/firebase"
 import { supabase } from "../../lib/supabase"
@@ -157,7 +158,7 @@ export function AuthView() {
     <div className="flex h-full min-h-dvh w-full flex-col items-center justify-center bg-background p-6" dir="rtl">
       <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-8 shadow-2xl">
         <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold text-foreground">سديم</h1>
+          <Logo className="w-24 h-24 mx-auto mb-4" />
           <p className="mt-2 text-sm text-muted-foreground">
             {mode === "login" && "مرحباً بك مجدداً"}
             {mode === "register" && "إنشاء حساب جديد"}

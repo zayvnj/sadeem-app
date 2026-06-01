@@ -15,6 +15,8 @@ import { PublicProfileView } from "./public-profile-view"
 import { AuthView } from "./auth-view"
 import { NotificationsView } from "./notifications-view"
 import { NavigationProvider, useNavigation } from "./navigation-context"
+import { Logo } from "./logo"
+import { GlobalLoadingScreen } from "./global-loading"
 import type { TabKey } from "./types"
 
 const titles: Record<TabKey, string> = {
@@ -46,27 +48,21 @@ function AppShellContent() {
     return () => unsubscribe()
   }, [])
 
-  if (loadingAuth) {
-    return (
-      <div className="flex min-h-dvh w-full items-center justify-center bg-background">
-        <div className="size-8 rounded-full border-4 border-muted border-t-foreground animate-spin" />
-      </div>
-    )
-  }
-
-  if (!user) {
-    return (
-      <div className="flex min-h-dvh w-full items-center justify-center bg-secondary p-0 sm:p-6">
-        <div className="relative flex h-dvh w-full max-w-md flex-col overflow-hidden sm:h-[860px] sm:rounded-[2.5rem] sm:border-8 sm:shadow-2xl bg-background sm:border-foreground">
-          <AuthView />
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="flex min-h-dvh w-full items-center justify-center bg-secondary p-0 sm:p-6">
-      {/* Phone frame */}
+    <>
+      <AnimatePresence>
+        {loadingAuth && <GlobalLoadingScreen />}
+      </AnimatePresence>
+
+      {!loadingAuth && !user ? (
+        <div className="flex min-h-dvh w-full items-center justify-center bg-secondary p-0 sm:p-6">
+          <div className="relative flex h-dvh w-full max-w-md flex-col overflow-hidden sm:h-[860px] sm:rounded-[2.5rem] sm:border-8 sm:shadow-2xl bg-background sm:border-foreground">
+            <AuthView />
+          </div>
+        </div>
+      ) : !loadingAuth && user ? (
+        <div className="flex min-h-dvh w-full items-center justify-center bg-secondary p-0 sm:p-6">
+          {/* Phone frame */}
       <div
         className={`relative flex h-dvh w-full max-w-md flex-col overflow-hidden sm:h-[860px] sm:rounded-[2.5rem] sm:border-8 sm:shadow-2xl transition-colors duration-300 ${
           isReels ? "bg-black sm:border-black" : "bg-background sm:border-foreground"
@@ -78,15 +74,20 @@ function AppShellContent() {
             isReels ? "bg-black text-white" : "bg-background text-foreground"
           }`}
         >
-          <motion.h1
+          <motion.div
             key={active}
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-xl font-bold tracking-tight"
-            style={{ fontFamily: active === "home" ? "var(--font-sans)" : undefined }}
+            className="flex items-center"
           >
-            {titles[active]}
-          </motion.h1>
+            {active === "home" ? (
+              <Logo className="w-10 h-10" />
+            ) : (
+              <h1 className="text-xl font-bold tracking-tight">
+                {titles[active]}
+              </h1>
+            )}
+          </motion.div>
           {active === "home" && (
             <div className="flex items-center gap-4">
               <button onClick={() => setActive("notifications")} className="rounded-full p-1 hover:bg-secondary transition-colors">
@@ -130,14 +131,16 @@ function AppShellContent() {
           </AnimatePresence>
         </main>
 
-        {/* Bottom navigation */}
-        {!isSingleChatOpen && !selectedUserId && (
-          <div className="shrink-0">
-            <BottomNav active={active} onChange={setActive} dark={isReels} />
-          </div>
-        )}
+          {/* Bottom navigation */}
+          {!isSingleChatOpen && !selectedUserId && (
+            <div className="shrink-0">
+              <BottomNav active={active} onChange={setActive} dark={isReels} />
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+      ) : null}
+    </>
   )
 }
 
