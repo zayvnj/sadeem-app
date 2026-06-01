@@ -1,36 +1,32 @@
-
-> my-project@0.1.0 dev
-> next dev
-
-▲ Next.js 16.2.6 (Turbopack)
-- Local:         http://localhost:3000
-- Network:       http://192.168.0.2:3000
-✓ Ready in 536ms
-
-○ Compiling / ...
-Failed to initialize Firebase Auth Error [FirebaseError]: Firebase: Error (auth/invalid-api-key).
-    at module evaluation (lib/firebase.ts:19:17)
-    at module evaluation (components/sadeem/app-shell.tsx:7:1)
-  17 | try {
-  18 |   app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-> 19 |   auth = getAuth(app);
-     |                 ^
-  20 | } catch (error) {
-  21 |   console.warn("Failed to initialize Firebase Auth", error);
-  22 | } {
-  code: 'auth/invalid-api-key',
-  customData: { appName: '[DEFAULT]' }
-}
-Supabase env vars missing, using placeholder credentials for build.
- GET / 200 in 6.0s (next.js: 4.9s, application-code: 1096ms)
-[browser] Failed to initialize Firebase Auth FirebaseError: Firebase: Error (auth/invalid-api-key).
-    at module evaluation (lib/firebase.ts:19:17)
-    at module evaluation (components/sadeem/app-shell.tsx:7:1)
-  17 | try {
-  18 |   app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-> 19 |   auth = getAuth(app);
-     |                 ^
-  20 | } catch (error) {
-  21 |   console.warn("Failed to initialize Firebase Auth", error);
-  22 | } (lib/firebase.ts:21:11)
-[browser] Supabase env vars missing, using placeholder credentials for build. (lib/supabase.ts:7:11)
+npm warn exec The following package was not found and will be installed: serve@14.2.6
+ INFO  Accepting connections at http://localhost:3000
+ HTTP  6/1/2026 5:59:14 AM ::1 GET /
+ HTTP  6/1/2026 5:59:14 AM ::1 Returned 200 in 264 ms
+ HTTP  6/1/2026 5:59:15 AM ::1 GET /_next/static/media/01f0c602c274ea55-s.p.woff2
+ HTTP  6/1/2026 5:59:15 AM ::1 GET /_next/static/media/350b852752f8489d-s.p.woff2
+ HTTP  6/1/2026 5:59:15 AM ::1 Returned 200 in 4 ms
+ HTTP  6/1/2026 5:59:15 AM ::1 Returned 200 in 4 ms
+ HTTP  6/1/2026 5:59:15 AM ::1 GET /_next/static/css/62d0902ed26593ec.css
+ HTTP  6/1/2026 5:59:15 AM ::1 GET /_next/static/css/3399baaf3fa9be10.css
+ HTTP  6/1/2026 5:59:15 AM ::1 Returned 200 in 2 ms
+ HTTP  6/1/2026 5:59:15 AM ::1 Returned 200 in 4 ms
+ HTTP  6/1/2026 5:59:15 AM ::1 GET /_next/static/chunks/webpack-2d53b781822fe836.js
+ HTTP  6/1/2026 5:59:15 AM ::1 GET /_next/static/chunks/4bd1b696-442bcfc1dc890ea9.js
+ HTTP  6/1/2026 5:59:15 AM ::1 GET /_next/static/chunks/587-8c17b0b7fe976b91.js
+ HTTP  6/1/2026 5:59:15 AM ::1 GET /_next/static/chunks/main-app-c290716e3fe3d327.js
+ HTTP  6/1/2026 5:59:15 AM ::1 GET /_next/static/chunks/app/layout-2a6ed0b0d2b22b90.js
+ HTTP  6/1/2026 5:59:15 AM ::1 GET /_next/static/chunks/44530001-373640407f018d10.js
+ HTTP  6/1/2026 5:59:15 AM ::1 Returned 200 in 7 ms
+ HTTP  6/1/2026 5:59:15 AM ::1 Returned 200 in 6 ms
+ HTTP  6/1/2026 5:59:15 AM ::1 Returned 200 in 6 ms
+ HTTP  6/1/2026 5:59:15 AM ::1 Returned 200 in 7 ms
+ HTTP  6/1/2026 5:59:15 AM ::1 Returned 200 in 12 ms
+ HTTP  6/1/2026 5:59:15 AM ::1 GET /_next/static/chunks/2bfc466f-bcecf20ab783ab41.js
+ HTTP  6/1/2026 5:59:15 AM ::1 Returned 200 in 16 ms
+ HTTP  6/1/2026 5:59:15 AM ::1 GET /_next/static/chunks/983-438011b0b48fd22f.js
+ HTTP  6/1/2026 5:59:15 AM ::1 GET /_next/static/chunks/app/page-bef575d3eb96f896.js
+ HTTP  6/1/2026 5:59:15 AM ::1 Returned 200 in 15 ms
+ HTTP  6/1/2026 5:59:15 AM ::1 Returned 200 in 16 ms
+ HTTP  6/1/2026 5:59:15 AM ::1 Returned 200 in 35 ms
+ HTTP  6/1/2026 5:59:15 AM ::1 GET /_vercel/insights/script.js
+ HTTP  6/1/2026 5:59:15 AM ::1 Returned 404 in 3 ms
