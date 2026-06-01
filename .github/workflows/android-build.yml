@@ -48,6 +48,11 @@ jobs:
           npx cap sync android
 
       - name: Build Android APK
+        run: |
+          npx cap clean
+          npx cap sync android
+
+      - name: Assemble APK
         working-directory: android
         run: |
           chmod +x gradlew
