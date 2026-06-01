@@ -98,36 +98,38 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
       return
     }
 
+    const previousIsFollowing = isFollowing
+    const previousFollowersCount = followersCount
+
+    // Optimistic UI update
+    setIsFollowing(!previousIsFollowing)
+    setFollowersCount(c => previousIsFollowing ? Math.max(0, c - 1) : c + 1)
+
     try {
-      if (isFollowing) {
-        // Unfollow
-        setIsFollowing(false)
-        setFollowersCount(c => Math.max(0, c - 1))
+      if (previousIsFollowing) {
+        // Unfollow background request
         const { error } = await supabase
           .from("follows")
           .delete()
           .eq("follower_id", currentUser.uid)
           .eq("following_id", userId)
 
-        if (error) {
-          throw error
-        }
+        if (error) throw error
       } else {
-        // Follow
-        setIsFollowing(true)
-        setFollowersCount(c => c + 1)
+        // Follow background request
         const { error } = await supabase
           .from("follows")
           .insert({ follower_id: currentUser.uid, following_id: userId })
 
-        if (error) {
-          throw error
-        }
+        if (error) throw error
       }
     } catch (error) {
       console.error("Error toggling follow:", error)
-      toast.error("حدث خطأ أثناء تغيير حالة المتابعة")
-      fetchProfileData() // Revert on error
+      toast.error(error.message || "حدث خطأ أثناء تغيير حالة المتابعة")
+
+      // Revert local state on error without triggering a full reload
+      setIsFollowing(previousIsFollowing)
+      setFollowersCount(previousFollowersCount)
     }
   }
 
