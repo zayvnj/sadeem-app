@@ -29,10 +29,12 @@ export const useStoryNavigation = () => {
       })
     } else {
       // 4. Navigate to story editor (upload) if no story exists
-      // If it's another user, we probably shouldn't show upload.
-      // We will leave the check of whether to show upload to the context,
-      // but generally if we click our own empty avatar, it opens upload.
-      setShowStoryUpload(true)
+      // Ensure we only open upload if we tap our own avatar
+      import('@/lib/firebase').then(({ auth }) => {
+        if (auth?.currentUser?.uid === userId) {
+          setShowStoryUpload(true)
+        }
+      })
     }
   }
 

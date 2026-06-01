@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Plus, Loader2, X } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { auth } from "@/lib/firebase"
@@ -23,12 +23,6 @@ export function StoryUpload({ onUploadComplete, userAvatar }: StoryUploadProps) 
   const { addStory } = useStoriesStore()
   const { showStoryUpload, setShowStoryUpload, setStoryViewerData } = useNavigation()
 
-  useEffect(() => {
-    if (showStoryUpload && !isUploading && fileInputRef.current) {
-      fileInputRef.current.click()
-      setShowStoryUpload(false)
-    }
-  }, [showStoryUpload, isUploading])
 
   const compressImage = (file: File): Promise<Blob> => {
     return new Promise((resolve, reject) => {
@@ -150,13 +144,11 @@ export function StoryUpload({ onUploadComplete, userAvatar }: StoryUploadProps) 
       setSelectedFile(null)
       onUploadComplete()
 
-      // Auto open viewer
-      setTimeout(() => {
-        setStoryViewerData({
-          stories: [newStory],
-          initialIndex: 0
-        })
-      }, 500)
+      // Auto open viewer directly without arbitrary timeouts
+      setStoryViewerData({
+        stories: [newStory],
+        initialIndex: 0
+      })
     } catch (error: any) {
       console.error("Story upload error:", error)
       bwToast.dismiss(toastId)
@@ -261,6 +253,35 @@ export function StoryUpload({ onUploadComplete, userAvatar }: StoryUploadProps) 
         className="hidden"
       />
     </div>
+
+    {/* Conditionally rendered fullscreen upload/editor triggered by context */}
+    <AnimatePresence>
+      {showStoryUpload && !previewUrl && (
+        <motion.div
+          initial={{ opacity: 0, y: 50 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 50 }}
+          className="fixed inset-0 z-[200] bg-black text-white flex flex-col items-center justify-center"
+        >
+          <div className="absolute top-0 left-0 right-0 p-4 pt-16 z-10 flex items-center justify-end bg-gradient-to-b from-black/60 to-transparent">
+            <button onClick={() => setShowStoryUpload(false)} className="p-2 rounded-full bg-black/40 backdrop-blur">
+              <X className="size-6" />
+            </button>
+          </div>
+          <div className="flex flex-col items-center justify-center gap-4 text-center">
+            <h2 className="text-xl font-bold">إنشاء قصة</h2>
+            <p className="text-muted-foreground">اختر صورة أو فيديو لقصتك</p>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="mt-4 bg-primary text-primary-foreground px-6 py-3 rounded-full font-bold flex items-center gap-2 hover:opacity-90"
+            >
+              <Plus className="size-5" />
+              اختيار من المعرض
+            </button>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
     </>
   )
 }
