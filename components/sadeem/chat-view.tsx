@@ -305,20 +305,8 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
               const isMe = msg.sender_id === currentUser?.uid
               return (
                 <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`flex flex-col gap-2 max-w-[75%] rounded-2xl px-4 py-2 text-sm ${isMe ? 'bg-foreground text-background rounded-tl-sm' : 'bg-secondary text-foreground rounded-tr-sm'}`}>
-                    {msg.reply_media_url && (
-                        <div className="relative w-full aspect-[9/16] max-h-48 rounded-lg overflow-hidden bg-muted">
-                           {msg.reply_media_url.match(/\.(mp4|webm|ogg)$/i) ? (
-                              <video src={msg.reply_media_url} className="size-full object-cover" />
-                           ) : (
-                              <img src={msg.reply_media_url} alt="Story Reply" className="size-full object-cover" />
-                           )}
-                           <div className="absolute top-2 right-2 text-[10px] bg-black/50 text-white px-2 py-0.5 rounded-full">
-                              رد على قصة
-                           </div>
-                        </div>
-                    )}
-                    <p>{msg.content}</p>
+                  <div className={`max-w-[75%] rounded-2xl px-4 py-2 text-sm ${isMe ? 'bg-foreground text-background rounded-tl-sm' : 'bg-secondary text-foreground rounded-tr-sm'}`}>
+                    {msg.content}
                   </div>
                 </div>
               )
