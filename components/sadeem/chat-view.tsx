@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { Sparkles, Search, Send, ArrowRight, Loader2, BadgeCheck } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { auth } from "@/lib/firebase"
+import { useNavigation } from "./navigation-context"
 
 const aiAssistant = {
   name: "مساعد سديم الذكي",
@@ -29,6 +30,7 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
   const [chats, setChats] = useState<any[]>([])
   const [activeChat, setActiveChat] = useState<any | null>(null)
   const [messages, setMessages] = useState<any[]>([])
+  const { setSelectedUserId } = useNavigation()
   const [newMessage, setNewMessage] = useState("")
   const [loadingChats, setLoadingChats] = useState(true)
   const [loadingMessages, setLoadingMessages] = useState(false)
@@ -271,15 +273,23 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
           <button onClick={() => { setActiveChat(null); if (onChatOpenStateChange) onChatOpenStateChange(false); }} className="p-2 -mr-2 rounded-full hover:bg-secondary">
             <ArrowRight className="size-5" />
           </button>
-          {activeChat.user?.avatar_url ? (
-            <img src={activeChat.user.avatar_url} alt="" className="size-10 rounded-full object-cover" />
-          ) : (
-            <div className="size-10 rounded-full bg-muted flex items-center justify-center font-bold text-muted-foreground">
-              {(activeChat.user?.full_name || activeChat.user?.username || "م").charAt(0)}
-            </div>
-          )}
-          <div className="flex flex-col">
-            <span className="font-semibold text-sm flex items-center gap-1">
+          <div
+            className="cursor-pointer"
+            onClick={() => activeChat.user?.id && setSelectedUserId(activeChat.user.id)}
+          >
+            {activeChat.user?.avatar_url ? (
+              <img src={activeChat.user.avatar_url} alt="" className="size-10 rounded-full object-cover" />
+            ) : (
+              <div className="size-10 rounded-full bg-muted flex items-center justify-center font-bold text-muted-foreground">
+                {(activeChat.user?.full_name || activeChat.user?.username || "م").charAt(0)}
+              </div>
+            )}
+          </div>
+          <div
+            className="flex flex-col cursor-pointer"
+            onClick={() => activeChat.user?.id && setSelectedUserId(activeChat.user.id)}
+          >
+            <span className="font-semibold text-sm flex items-center gap-1 hover:underline">
               {activeChat.user?.full_name || activeChat.user?.username || `مستخدم`}
               {activeChat.user?.is_verified && <BadgeCheck className="size-4 text-blue-500" />}
             </span>
@@ -400,16 +410,23 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
               return (
                 <motion.li key={chat.id} variants={item}>
                   <button onClick={() => openChat(chat.id, chat.user)} className="flex w-full items-center gap-3 px-4 py-3 text-right transition-colors hover:bg-secondary">
-                    {chat.user.avatar_url ? (
-                      <img src={chat.user.avatar_url} alt="" className="size-12 rounded-full object-cover" />
-                    ) : (
-                      <span className="flex size-12 items-center justify-center rounded-full bg-muted font-semibold text-muted-foreground">
-                        {name.charAt(0)}
-                      </span>
-                    )}
+                    <div
+                      onClick={(e) => { e.stopPropagation(); chat.user?.id && setSelectedUserId(chat.user.id); }}
+                    >
+                      {chat.user.avatar_url ? (
+                        <img src={chat.user.avatar_url} alt="" className="size-12 rounded-full object-cover" />
+                      ) : (
+                        <span className="flex size-12 items-center justify-center rounded-full bg-muted font-semibold text-muted-foreground">
+                          {name.charAt(0)}
+                        </span>
+                      )}
+                    </div>
                     <span className="flex-1">
                       <span className="flex items-center justify-between">
-                        <span className="text-sm font-semibold flex items-center gap-1">
+                        <span
+                          className="text-sm font-semibold flex items-center gap-1 hover:underline"
+                          onClick={(e) => { e.stopPropagation(); chat.user?.id && setSelectedUserId(chat.user.id); }}
+                        >
                           {name}
                           {chat.user.is_verified && <BadgeCheck className="size-4 text-blue-500" />}
                         </span>
