@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useContext } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Loader2, BadgeCheck } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { auth } from "@/lib/firebase"
+import { NavigationContext } from "./app-shell"
 
 const container = {
   hidden: { opacity: 0 },
@@ -20,20 +21,45 @@ const item = {
 }
 
 export function HomeFeed() {
+  const { navigateToProfile } = useContext(NavigationContext)
   const [posts, setPosts] = useState<any[]>([])
   const [stories, setStories] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [followingCount, setFollowingCount] = useState(0)
 
   const fetchFeedData = async () => {
     try {
       const user = auth?.currentUser
 
-      // Fetch posts
-      const { data: postsData, error: postsError } = await supabase
+      if (!user) {
+        setLoading(false)
+        return
+      }
+
+      // 1. Get current user's following list
+      const { data: followingData } = await supabase
+        .from("follows")
+        .select("following_id")
+        .eq("follower_id", user.uid)
+
+      const followingIds = followingData?.map(f => f.following_id) || []
+      setFollowingCount(followingIds.length)
+
+      // 2. Fetch posts based on following status
+      let query = supabase
         .from('posts')
         .select('*, users:user_id(id, full_name, username, avatar_url, is_verified), post_likes(user_id)')
+        .eq('type', 'post')
         .order('created_at', { ascending: false })
-        .limit(10)
+        .limit(20)
+
+      // If user follows people, filter by them (plus their own posts).
+      // If they follow no one, we fetch global posts as fallback.
+      if (followingIds.length > 0) {
+        query = query.in('user_id', [...followingIds, user.uid])
+      }
+
+      const { data: postsData, error: postsError } = await query
 
       if (postsError && postsError.code !== '42P01') console.error('Posts fetch error:', postsError)
 
@@ -49,8 +75,9 @@ export function HomeFeed() {
       })
 
       const { data: storiesData, error: storiesError } = await supabase
-        .from('stories')
-        .select('*')
+        .from('posts')
+        .select('*, users:user_id(id, full_name, username, avatar_url, is_verified)')
+        .eq('type', 'story')
         .order('created_at', { ascending: false })
         .limit(10)
 
@@ -149,18 +176,27 @@ export function HomeFeed() {
         className="flex gap-4 overflow-x-auto px-4 py-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {displayStories.map((story, i) => {
-          const name = typeof story === 'string' ? story : 'مستخدم'
+          const name = typeof story === 'string' ? story : (story.users?.full_name || story.users?.username || 'مستخدم')
+          const isFallback = typeof story === 'string'
+
           return (
-            <motion.div key={typeof story === 'string' ? name : story.id} variants={item} className="flex flex-col items-center gap-1.5 shrink-0">
-              <div className="rounded-full p-[2px] ring-2 ring-foreground">
+            <motion.div key={isFallback ? name : story.id} variants={item} className="flex flex-col items-center gap-1.5 shrink-0">
+              <button
+                onClick={() => {
+                  if (!isFallback) navigateToProfile(story.user_id)
+                }}
+                className="rounded-full p-[2px] ring-2 ring-foreground hover:scale-105 transition-transform"
+              >
                 <div className="size-16 rounded-full bg-muted flex items-center justify-center overflow-hidden text-lg font-semibold text-muted-foreground">
-                  {typeof story !== 'string' && story.media_url ? (
+                  {!isFallback && story.media_url ? (
                     <img src={story.media_url} alt="Story" className="size-full object-cover" />
+                  ) : !isFallback && story.users?.avatar_url ? (
+                    <img src={story.users.avatar_url} alt="User Avatar" className="size-full object-cover" />
                   ) : (
                     name.charAt(0)
                   )}
                 </div>
-              </div>
+              </button>
               <span className="text-xs text-muted-foreground max-w-16 truncate">{name}</span>
             </motion.div>
           )
@@ -176,22 +212,31 @@ export function HomeFeed() {
         </div>
       ) : (
         <motion.div variants={container} initial="hidden" animate="show" className="flex flex-col">
+          {followingCount === 0 && (
+            <div className="px-4 py-3 mb-2 bg-secondary/50 text-center text-sm text-muted-foreground border-y border-border">
+              أنت لا تتابع أي شخص بعد. إليك بعض المنشورات العامة لاستكشافها!
+            </div>
+          )}
           {posts.length > 0 ? posts.map((post) => (
             <motion.article key={post.id} variants={item} className="border-b border-border px-4 py-4">
               <div className="flex items-center gap-3">
-                {post.users?.avatar_url ? (
-                  <img src={post.users.avatar_url} alt="" className="size-10 rounded-full object-cover" />
-                ) : (
-                  <div className="size-10 rounded-full bg-muted flex items-center justify-center font-semibold text-muted-foreground overflow-hidden">
-                    {(post.users?.full_name || post.users?.username || 'م').charAt(0)}
-                  </div>
-                )}
+                <button onClick={() => navigateToProfile(post.user_id)} className="shrink-0">
+                  {post.users?.avatar_url ? (
+                    <img src={post.users.avatar_url} alt="" className="size-10 rounded-full object-cover" />
+                  ) : (
+                    <div className="size-10 rounded-full bg-muted flex items-center justify-center font-semibold text-muted-foreground overflow-hidden">
+                      {(post.users?.full_name || post.users?.username || 'م').charAt(0)}
+                    </div>
+                  )}
+                </button>
                 <div className="flex-1">
-                  <p className="text-sm font-semibold leading-tight flex items-center gap-1">
-                    {post.users?.full_name || post.users?.username || 'مستخدم سديم'}
-                    {post.users?.is_verified && <BadgeCheck className="size-4 text-blue-500" />}
-                  </p>
-                  <p className="text-xs text-muted-foreground">@{post.users?.username || post.user_id?.substring(0,6)} · الآن</p>
+                  <button onClick={() => navigateToProfile(post.user_id)} className="text-start">
+                    <p className="text-sm font-semibold leading-tight flex items-center gap-1">
+                      {post.users?.full_name || post.users?.username || 'مستخدم سديم'}
+                      {post.users?.is_verified && <BadgeCheck className="size-4 text-blue-500" />}
+                    </p>
+                    <p className="text-xs text-muted-foreground">@{post.users?.username || post.user_id?.substring(0,6)} · الآن</p>
+                  </button>
                 </div>
                 <button className="text-muted-foreground" aria-label="خيارات">
                   <MoreHorizontal className="size-5" />

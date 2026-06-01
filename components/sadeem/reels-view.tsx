@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, useContext } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Heart, MessageCircle, Send, Music2, Play, Volume2, VolumeX, Loader2, BadgeCheck } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { auth } from "@/lib/firebase"
+import { NavigationContext } from "./app-shell"
 
 export function ReelsView() {
   const [reels, setReels] = useState<any[]>([])
@@ -134,6 +135,7 @@ export function ReelsView() {
 }
 
 function ReelItem({ reel, handleLike, index }: { reel: any, handleLike: (id: string, isDoubleTap?: boolean) => void, index: number }) {
+  const { navigateToProfile } = useContext(NavigationContext)
   const [isPlaying, setIsPlaying] = useState(true)
   const [isMuted, setIsMuted] = useState(false)
   const [progress, setProgress] = useState(0)
@@ -311,19 +313,21 @@ function ReelItem({ reel, handleLike, index }: { reel: any, handleLike: (id: str
       </div>
 
       {/* Caption */}
-      <div className="absolute bottom-24 right-4 left-20 text-white z-30 pointer-events-none flex flex-col gap-2">
-        <div className="flex items-center gap-2">
-          {reel.users?.avatar_url ? (
-            <img src={reel.users.avatar_url} alt="" className="size-8 rounded-full object-cover" />
-          ) : (
-            <div className="size-8 rounded-full bg-white/20 flex items-center justify-center font-bold text-white text-xs">
-              {(reel.users?.full_name || reel.users?.username || 'م').charAt(0)}
-            </div>
-          )}
-          <p className="text-sm font-bold flex items-center gap-1 drop-shadow-md">
-            {reel.users?.full_name || reel.users?.username || `@${reel.user_id?.substring(0,8)}`}
-            {reel.users?.is_verified && <BadgeCheck className="size-4 text-blue-400 drop-shadow-sm" />}
-          </p>
+      <div className="absolute bottom-24 right-4 left-20 text-white z-30 flex flex-col gap-2">
+        <div className="flex items-center gap-2 pointer-events-auto">
+          <button onClick={() => navigateToProfile(reel.user_id)} className="flex items-center gap-2">
+            {reel.users?.avatar_url ? (
+              <img src={reel.users.avatar_url} alt="" className="size-8 rounded-full object-cover" />
+            ) : (
+              <div className="size-8 rounded-full bg-white/20 flex items-center justify-center font-bold text-white text-xs">
+                {(reel.users?.full_name || reel.users?.username || 'م').charAt(0)}
+              </div>
+            )}
+            <p className="text-sm font-bold flex items-center gap-1 drop-shadow-md">
+              {reel.users?.full_name || reel.users?.username || `@${reel.user_id?.substring(0,8)}`}
+              {reel.users?.is_verified && <BadgeCheck className="size-4 text-blue-400 drop-shadow-sm" />}
+            </p>
+          </button>
         </div>
         <p className="text-sm leading-relaxed text-pretty text-white/90 drop-shadow-md">{reel.text || reel.caption || ""}</p>
         <div className="mt-1 flex items-center gap-2 text-xs text-white/80 drop-shadow-md">

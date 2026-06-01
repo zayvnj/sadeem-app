@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useContext } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Sparkles, Search, Send, ArrowRight, Loader2, BadgeCheck } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { auth } from "@/lib/firebase"
+import { NavigationContext } from "./app-shell"
 
 const aiAssistant = {
   name: "مساعد سديم الذكي",
@@ -26,6 +27,7 @@ interface ChatViewProps {
 }
 
 export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
+  const { navigateToProfile } = useContext(NavigationContext)
   const [chats, setChats] = useState<any[]>([])
   const [activeChat, setActiveChat] = useState<any | null>(null)
   const [messages, setMessages] = useState<any[]>([])
@@ -398,8 +400,8 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
                 : "الآن"
 
               return (
-                <motion.li key={chat.id} variants={item}>
-                  <button onClick={() => openChat(chat.id, chat.user)} className="flex w-full items-center gap-3 px-4 py-3 text-right transition-colors hover:bg-secondary">
+                <motion.li key={chat.id} variants={item} className="flex w-full items-center gap-3 px-4 py-3 text-right transition-colors hover:bg-secondary">
+                  <button onClick={() => navigateToProfile(chat.user.id)} className="shrink-0">
                     {chat.user.avatar_url ? (
                       <img src={chat.user.avatar_url} alt="" className="size-12 rounded-full object-cover" />
                     ) : (
@@ -407,22 +409,22 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
                         {name.charAt(0)}
                       </span>
                     )}
-                    <span className="flex-1">
-                      <span className="flex items-center justify-between">
-                        <span className="text-sm font-semibold flex items-center gap-1">
-                          {name}
-                          {chat.user.is_verified && <BadgeCheck className="size-4 text-blue-500" />}
+                  </button>
+                  <button onClick={() => openChat(chat.id, chat.user)} className="flex-1 text-start">
+                    <span className="flex items-center justify-between">
+                      <span className="text-sm font-semibold flex items-center gap-1">
+                        {name}
+                        {chat.user.is_verified && <BadgeCheck className="size-4 text-blue-500" />}
+                      </span>
+                      <span className="text-xs text-muted-foreground">{timeString}</span>
+                    </span>
+                    <span className="mt-0.5 flex items-center justify-between gap-2">
+                      <span className="block text-xs text-muted-foreground truncate">{chat.lastMessage}</span>
+                      {chat.unread > 0 && (
+                        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-foreground text-[10px] font-bold text-background">
+                          {chat.unread}
                         </span>
-                        <span className="text-xs text-muted-foreground">{timeString}</span>
-                      </span>
-                      <span className="mt-0.5 flex items-center justify-between gap-2">
-                        <span className="block text-xs text-muted-foreground truncate">{chat.lastMessage}</span>
-                        {chat.unread > 0 && (
-                          <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-foreground text-[10px] font-bold text-background">
-                            {chat.unread}
-                          </span>
-                        )}
-                      </span>
+                      )}
                     </span>
                   </button>
                 </motion.li>

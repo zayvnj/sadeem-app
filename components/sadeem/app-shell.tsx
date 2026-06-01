@@ -11,9 +11,17 @@ import { ReelsView } from "./reels-view"
 import { AddView } from "./add-view"
 import { ChatView } from "./chat-view"
 import { ProfileView } from "./profile-view"
+import { PublicProfileView } from "./public-profile-view"
 import { AuthView } from "./auth-view"
 import { NotificationsView } from "./notifications-view"
 import type { TabKey } from "./types"
+import { createContext, useContext } from "react"
+
+export const NavigationContext = createContext<{
+  navigateToProfile: (userId: string) => void
+}>({
+  navigateToProfile: () => {},
+})
 
 const titles: Record<TabKey, string> = {
   home: "سديم",
@@ -29,6 +37,8 @@ export function AppShell() {
   const [user, setUser] = useState<User | null>(null)
   const [loadingAuth, setLoadingAuth] = useState(true)
   const [isSingleChatOpen, setIsSingleChatOpen] = useState(false)
+  const [selectedTargetUserId, setSelectedTargetUserId] = useState<string | null>(null)
+
   const isReels = active === "reels"
 
   useEffect(() => {
@@ -51,6 +61,10 @@ export function AppShell() {
     )
   }
 
+  const navigateToProfile = (userId: string) => {
+    setSelectedTargetUserId(userId)
+  }
+
   if (!user) {
     return (
       <div className="flex min-h-dvh w-full items-center justify-center bg-secondary p-0 sm:p-6">
@@ -62,13 +76,32 @@ export function AppShell() {
   }
 
   return (
-    <div className="flex min-h-dvh w-full items-center justify-center bg-secondary p-0 sm:p-6">
-      {/* Phone frame */}
+    <NavigationContext.Provider value={{ navigateToProfile }}>
+      <div className="flex min-h-dvh w-full items-center justify-center bg-secondary p-0 sm:p-6">
+        {/* Phone frame */}
       <div
         className={`relative flex h-dvh w-full max-w-md flex-col overflow-hidden sm:h-[860px] sm:rounded-[2.5rem] sm:border-8 sm:shadow-2xl transition-colors duration-300 ${
           isReels ? "bg-black sm:border-black" : "bg-background sm:border-foreground"
         }`}
       >
+        {/* Public Profile Overlay */}
+        <AnimatePresence>
+          {selectedTargetUserId && (
+            <motion.div
+              initial={{ opacity: 0, x: 24 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -24 }}
+              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              className="absolute inset-0 z-[100]"
+            >
+              <PublicProfileView
+                userId={selectedTargetUserId}
+                onBack={() => setSelectedTargetUserId(null)}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Header */}
         <header
           className={`flex shrink-0 items-center justify-between px-4 py-3 transition-colors duration-300 ${
@@ -118,12 +151,13 @@ export function AppShell() {
         </main>
 
         {/* Bottom navigation */}
-        {!isSingleChatOpen && (
+        {!isSingleChatOpen && !selectedTargetUserId && (
           <div className="shrink-0">
             <BottomNav active={active} onChange={setActive} dark={isReels} />
           </div>
         )}
       </div>
     </div>
+    </NavigationContext.Provider>
   )
 }
