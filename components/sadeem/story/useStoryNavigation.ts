@@ -1,5 +1,6 @@
 import { useStoriesStore } from '@/lib/stores/useStoriesStore'
 import { useNavigation } from '@/components/sadeem/navigation-context'
+import { auth } from '@/lib/firebase'
 
 export const useStoryNavigation = () => {
   const { setStoryViewerData, setShowStoryUpload } = useNavigation()
@@ -30,11 +31,9 @@ export const useStoryNavigation = () => {
     } else {
       // 4. Navigate to story editor (upload) if no story exists
       // Ensure we only open upload if we tap our own avatar
-      import('@/lib/firebase').then(({ auth }) => {
-        if (auth?.currentUser?.uid === userId) {
-          setShowStoryUpload(true)
-        }
-      })
+      if (auth?.currentUser?.uid === userId) {
+        setShowStoryUpload(true)
+      }
     }
   }
 
