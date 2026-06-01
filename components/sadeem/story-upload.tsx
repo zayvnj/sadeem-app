@@ -1,10 +1,11 @@
 "use client"
 
 import { useState, useRef } from "react"
-import { Plus, Loader2 } from "lucide-react"
+import { Plus, Loader2, X } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { auth } from "@/lib/firebase"
 import { toast } from "sonner"
+import { motion, AnimatePresence } from "framer-motion"
 
 interface StoryUploadProps {
   onUploadComplete: () => void
@@ -13,6 +14,8 @@ interface StoryUploadProps {
 
 export function StoryUpload({ onUploadComplete, userAvatar }: StoryUploadProps) {
   const [isUploading, setIsUploading] = useState(false)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const compressImage = (file: File): Promise<Blob> => {
@@ -63,7 +66,7 @@ export function StoryUpload({ onUploadComplete, userAvatar }: StoryUploadProps) 
     })
   }
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -71,6 +74,14 @@ export function StoryUpload({ onUploadComplete, userAvatar }: StoryUploadProps) 
       toast.error("يرجى اختيار صورة فقط للقصة")
       return
     }
+
+    setSelectedFile(file)
+    const url = URL.createObjectURL(file)
+    setPreviewUrl(url)
+  }
+
+  const handlePublish = async () => {
+    if (!selectedFile) return
 
     const user = auth?.currentUser
     if (!user) {
@@ -83,7 +94,7 @@ export function StoryUpload({ onUploadComplete, userAvatar }: StoryUploadProps) 
 
     try {
       // 1. Compress Image
-      const compressedBlob = await compressImage(file)
+      const compressedBlob = await compressImage(selectedFile)
       const compressedFile = new File([compressedBlob], `story_${Date.now()}.jpg`, { type: 'image/jpeg' })
 
       // 2. Upload to Storage (media bucket)
@@ -109,6 +120,8 @@ export function StoryUpload({ onUploadComplete, userAvatar }: StoryUploadProps) 
       if (dbError) throw dbError
 
       toast.success("تم رفع القصة بنجاح", { id: toastId })
+      setPreviewUrl(null)
+      setSelectedFile(null)
       onUploadComplete()
     } catch (error: any) {
       console.error("Story upload error:", error)
@@ -121,7 +134,63 @@ export function StoryUpload({ onUploadComplete, userAvatar }: StoryUploadProps) 
     }
   }
 
+  const handleCancel = () => {
+    setPreviewUrl(null)
+    setSelectedFile(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
+  }
+
   return (
+    <>
+    <AnimatePresence>
+      {previewUrl && (
+        <motion.div
+          initial={{ opacity: 0, y: 50 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 50 }}
+          className="fixed inset-0 z-[200] bg-black text-white flex flex-col"
+        >
+          {/* Header */}
+          <div className="absolute top-0 left-0 right-0 p-4 pt-16 z-10 flex items-center justify-end bg-gradient-to-b from-black/60 to-transparent">
+            <button onClick={handleCancel} className="p-2 rounded-full bg-black/40 backdrop-blur">
+              <X className="size-6" />
+            </button>
+          </div>
+
+          {/* Media Preview */}
+          <div className="flex-1 relative flex items-center justify-center bg-zinc-900">
+            <img
+              src={previewUrl}
+              alt="Story Preview"
+              className="w-full h-full object-cover"
+            />
+          </div>
+
+          {/* Footer - "Your Story" Button */}
+          <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/80 to-transparent z-10 flex justify-end">
+            <button
+              onClick={handlePublish}
+              disabled={isUploading}
+              className="flex items-center gap-3 bg-white/20 hover:bg-white/30 transition-colors backdrop-blur px-5 py-3 rounded-full text-white"
+            >
+              <div className="size-8 rounded-full bg-muted flex items-center justify-center overflow-hidden border border-white/50">
+                {isUploading ? (
+                   <Loader2 className="size-4 animate-spin text-white" />
+                ) : userAvatar ? (
+                  <img src={userAvatar} alt="Your Avatar" className="size-full object-cover" />
+                ) : (
+                  <span className="text-xs font-bold text-black">م</span>
+                )}
+              </div>
+              <span className="font-semibold">{isUploading ? 'جاري النشر...' : 'قصتك'}</span>
+            </button>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+
     <div className="flex flex-col items-center gap-1.5 shrink-0 relative">
       <div
         className="relative cursor-pointer"
@@ -157,5 +226,6 @@ export function StoryUpload({ onUploadComplete, userAvatar }: StoryUploadProps) 
         className="hidden"
       />
     </div>
+    </>
   )
 }

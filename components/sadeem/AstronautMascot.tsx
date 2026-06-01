@@ -167,12 +167,12 @@ export function AstronautMascot({ activeTab, tabsKeys, dark }: { activeTab: stri
 
         // Rest for 5s
         let restTime = 0
-        while(restTime < 5000 && stateRef.current === 'resting' && isMountedRef.current) {
+        while(restTime < 5000 && (stateRef.current as string) === 'resting' && isMountedRef.current) {
            await new Promise(r => setTimeout(r, 500))
            restTime += 500
         }
 
-        if (stateRef.current === 'resting') {
+        if ((stateRef.current as string) === 'resting') {
            controls.set({ y: 0 }) // Stand up
            setState('roaming')
         }
