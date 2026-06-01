@@ -27,9 +27,10 @@ export function BottomNav({
       className={`relative flex items-center justify-around border-t px-2 py-2 transition-colors duration-300 ${
         dark ? "border-white/10 bg-black text-white" : "border-border bg-background text-foreground"
       }`}
+      id="bottom-nav-container"
     >
-      <AstronautMascot />
-      {tabs.map((tab) => {
+      <AstronautMascot activeTab={active} tabsKeys={tabs.map((t) => t.key)} dark={dark} />
+      {tabs.map((tab, index) => {
         const isActive = active === tab.key
         const isAdd = tab.key === "add"
 
@@ -54,6 +55,7 @@ export function BottomNav({
         return (
           <button
             key={tab.key}
+            id={`nav-tab-${index}`}
             onClick={() => onChange(tab.key)}
             aria-label={tab.label}
             aria-current={isActive ? "page" : undefined}
