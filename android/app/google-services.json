@@ -1,0 +1,47 @@
+[{
+  "project_info": {
+    "project_number": "555021067416",
+    "project_id": "sadeem-auth",
+    "storage_bucket": "sadeem-auth.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:555021067416:android:c7b5f3fce3b8d3c1e41ced",
+        "android_client_info": {
+          "package_name": "com.sadeem.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "555021067416-1tt8l8ae2pbdl58fc0p5nthmmqr4kb37.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sadeem.app",
+            "certificate_hash": "2e62dc5ce3c634194264bbb341d2e2c91021d006"
+          }
+        },
+        {
+          "client_id": "555021067416-rc294q6e039nbbe1r02ueeub4o3jnk7d.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAlvRp4Y-eHzjpVpp4_U3k_gqyqROw7ZS8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "555021067416-rc294q6e039nbbe1r02ueeub4o3jnk7d.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}]
