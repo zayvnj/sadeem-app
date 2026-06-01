@@ -7,12 +7,6 @@ import { supabase } from "@/lib/supabase"
 import { auth } from "@/lib/firebase"
 import { useNavigation } from "./navigation-context"
 
-const aiAssistant = {
-  name: "مساعد سديم الذكي",
-  last: "كيف يمكنني مساعدتك اليوم؟",
-  time: "الآن",
-}
-
 const container = {
   hidden: { opacity: 0 },
   show: { opacity: 1, transition: { staggerChildren: 0.06 } },
@@ -374,25 +368,6 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
           </div>
         </div>
       )}
-
-      {/* AI assistant pinned */}
-      <motion.button
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        whileTap={{ scale: 0.98 }}
-        className="mt-4 flex w-full items-center gap-3 px-4 py-3 text-right"
-      >
-        <span className="relative flex size-12 items-center justify-center rounded-full bg-foreground text-background">
-          <Sparkles className="size-5" />
-        </span>
-        <span className="flex-1 border-b border-border pb-3">
-          <span className="flex items-center justify-between">
-            <span className="text-sm font-semibold">{aiAssistant.name}</span>
-            <span className="text-xs text-muted-foreground">{aiAssistant.time}</span>
-          </span>
-          <span className="mt-0.5 block text-xs text-muted-foreground truncate">{aiAssistant.last}</span>
-        </span>
-      </motion.button>
 
       {!searchQuery && (
         loadingChats ? (

@@ -98,7 +98,7 @@ export function ProfileView() {
   }
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((user) => {
+    const unsubscribe = auth.onAuthStateChanged((user: any) => {
       fetchProfileData(user)
     })
     return () => unsubscribe()
@@ -218,7 +218,7 @@ export function ProfileView() {
          return
       }
 
-      await fetchProfileData()
+      await fetchProfileData(auth.currentUser)
       setIsEditSheetOpen(false)
       toast.success("تم حفظ الملف الشخصي بنجاح")
     } catch (e: any) {

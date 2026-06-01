@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Heart, MessageCircle, Send, Music2, Play, Volume2, VolumeX, Loader2, BadgeCheck } from "lucide-react"
 import { supabase } from "@/lib/supabase"
@@ -136,6 +136,7 @@ export function ReelsView() {
 }
 
 function ReelItem({ reel, handleLike, index }: { reel: any, handleLike: (id: string, isDoubleTap?: boolean) => void, index: number }) {
+  const { setSelectedUserId } = useNavigation()
   const [isPlaying, setIsPlaying] = useState(true)
   const [isMuted, setIsMuted] = useState(false)
   const [progress, setProgress] = useState(0)

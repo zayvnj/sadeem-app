@@ -123,7 +123,7 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
 
         if (error) throw error
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error toggling follow:", error)
       toast.error(error.message || "حدث خطأ أثناء تغيير حالة المتابعة")
 

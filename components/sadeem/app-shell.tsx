@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { Heart, Send } from "lucide-react"
+import { Heart, Send, PlusSquare } from "lucide-react"
 import { onAuthStateChanged, User } from "firebase/auth"
 import { auth } from "@/lib/firebase"
 import { BottomNav } from "./bottom-nav"
@@ -14,6 +14,7 @@ import { ProfileView } from "./profile-view"
 import { PublicProfileView } from "./public-profile-view"
 import { AuthView } from "./auth-view"
 import { NotificationsView } from "./notifications-view"
+import { AIAssistantView } from "./ai-assistant-view"
 import { NavigationProvider, useNavigation } from "./navigation-context"
 import { Logo } from "./logo"
 import { GlobalLoadingScreen } from "./global-loading"
@@ -26,6 +27,7 @@ const titles: Record<TabKey, string> = {
   chat: "المحادثات",
   profile: "الملف الشخصي",
   notifications: "الإشعارات",
+  aiAssistant: "المساعد الذكي",
 }
 
 function AppShellContent() {
@@ -90,6 +92,9 @@ function AppShellContent() {
           </motion.div>
           {active === "home" && (
             <div className="flex items-center gap-4">
+              <button onClick={() => setActive("add")} className="rounded-full p-1 hover:bg-secondary transition-colors">
+                <PlusSquare className="size-6" />
+              </button>
               <button onClick={() => setActive("notifications")} className="rounded-full p-1 hover:bg-secondary transition-colors">
                 <Heart className="size-6" />
               </button>
@@ -117,6 +122,7 @@ function AppShellContent() {
               {active === "chat" && <ChatView onChatOpenStateChange={setIsSingleChatOpen} />}
               {active === "profile" && <ProfileView />}
               {active === "notifications" && <NotificationsView />}
+              {active === "aiAssistant" && <AIAssistantView />}
             </motion.div>
           </AnimatePresence>
 

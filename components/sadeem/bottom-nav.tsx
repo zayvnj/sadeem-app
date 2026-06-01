@@ -1,14 +1,14 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { Home, Clapperboard, Plus, MessageCircle, User } from "lucide-react"
+import { Home, Clapperboard, Sparkles, MessageCircle, User } from "lucide-react"
 import type { TabKey } from "./types"
 import { AstronautMascot } from "./AstronautMascot"
 
 const tabs: { key: TabKey; label: string; icon: typeof Home }[] = [
   { key: "home", label: "الرئيسية", icon: Home },
   { key: "reels", label: "ريلز", icon: Clapperboard },
-  { key: "add", label: "إضافة", icon: Plus },
+  { key: "aiAssistant", label: "المساعد", icon: Sparkles },
   { key: "chat", label: "المحادثات", icon: MessageCircle },
   { key: "profile", label: "حسابي", icon: User },
 ]
@@ -32,25 +32,6 @@ export function BottomNav({
       <AstronautMascot activeTab={active} tabsKeys={tabs.map((t) => t.key)} dark={dark} />
       {tabs.map((tab, index) => {
         const isActive = active === tab.key
-        const isAdd = tab.key === "add"
-
-        if (isAdd) {
-          return (
-            <motion.button
-              key={tab.key}
-              onClick={() => onChange(tab.key)}
-              whileTap={{ scale: 0.85 }}
-              whileHover={{ rotate: 90 }}
-              transition={{ type: "spring", stiffness: 300, damping: 18 }}
-              aria-label={tab.label}
-              className={`flex size-11 items-center justify-center rounded-xl ${
-                dark ? "bg-white text-black" : "bg-foreground text-background"
-              }`}
-            >
-              <Plus className="size-6" />
-            </motion.button>
-          )
-        }
 
         return (
           <button
