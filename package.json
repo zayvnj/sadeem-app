@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "jest"
   },
   "dependencies": {
     "@capacitor-firebase/authentication": "^8.2.0",
@@ -65,15 +66,19 @@
     "sonner": "^1.7.1",
     "tailwind-merge": "^3.3.1",
     "vaul": "^1.1.2",
-    "zod": "^3.24.1"
+    "zod": "^3.24.1",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.0",
+    "@types/jest": "^30.0.0",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "jest-environment-jsdom": "^30.4.1",
     "postcss": "^8.5",
     "tailwindcss": "^4.2.0",
+    "ts-jest": "^29.4.11",
     "tw-animate-css": "1.3.3",
     "typescript": "5.7.3"
   }

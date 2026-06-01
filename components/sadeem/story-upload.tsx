@@ -4,8 +4,10 @@ import { useState, useRef } from "react"
 import { Plus, Loader2, X } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { auth } from "@/lib/firebase"
-import { toast } from "sonner"
+import { bwToast } from "./ui/bw-toast"
 import { motion, AnimatePresence } from "framer-motion"
+import { useStoriesStore } from "@/lib/stores/useStoriesStore"
+import { useNavigation } from "./navigation-context"
 
 interface StoryUploadProps {
   onUploadComplete: () => void
@@ -17,6 +19,16 @@ export function StoryUpload({ onUploadComplete, userAvatar }: StoryUploadProps) 
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const { addStory } = useStoriesStore()
+  const { showStoryUpload, setShowStoryUpload, setStoryViewerData } = useNavigation()
+
+  useEffect(() => {
+    if (showStoryUpload && !isUploading && fileInputRef.current) {
+      fileInputRef.current.click()
+      setShowStoryUpload(false)
+    }
+  }, [showStoryUpload, isUploading])
 
   const compressImage = (file: File): Promise<Blob> => {
     return new Promise((resolve, reject) => {
@@ -71,7 +83,7 @@ export function StoryUpload({ onUploadComplete, userAvatar }: StoryUploadProps) 
     if (!file) return
 
     if (!file.type.startsWith("image/")) {
-      toast.error("يرجى اختيار صورة فقط للقصة")
+      bwToast.error("يرجى اختيار صورة فقط للقصة")
       return
     }
 
@@ -85,12 +97,12 @@ export function StoryUpload({ onUploadComplete, userAvatar }: StoryUploadProps) 
 
     const user = auth?.currentUser
     if (!user) {
-      toast.error("يجب تسجيل الدخول لرفع قصة")
+      bwToast.error("يجب تسجيل الدخول لرفع قصة")
       return
     }
 
     setIsUploading(true)
-    const toastId = toast.loading("جاري رفع القصة...")
+    const toastId = bwToast.loading("جاري رفع القصة...")
 
     try {
       // 1. Compress Image
@@ -110,22 +122,45 @@ export function StoryUpload({ onUploadComplete, userAvatar }: StoryUploadProps) 
         .getPublicUrl(filePath)
 
       // 3. Insert into stories table
-      const { error: dbError } = await supabase
+      const { data: insertedData, error: dbError } = await supabase
         .from('stories')
         .insert({
           user_id: user.uid,
           media_url: publicUrl,
         })
+        .select('*, users:user_id(id, full_name, username, avatar_url, is_verified)')
+        .single()
 
       if (dbError) throw dbError
 
-      toast.success("تم رفع القصة بنجاح", { id: toastId })
+      // Fetch user profile to ensure `users` relation is populated if the single select failed to populate it.
+      let newStory = insertedData;
+      if (!newStory.users) {
+         const { data: userData } = await supabase.from('users').select('id, full_name, username, avatar_url, is_verified').eq('id', user.uid).single()
+         newStory.users = userData;
+      }
+
+      // Add to store
+      addStory(newStory)
+
+      bwToast.dismiss(toastId)
+      bwToast.success("تم رفع القصة بنجاح")
+
       setPreviewUrl(null)
       setSelectedFile(null)
       onUploadComplete()
+
+      // Auto open viewer
+      setTimeout(() => {
+        setStoryViewerData({
+          stories: [newStory],
+          initialIndex: 0
+        })
+      }, 500)
     } catch (error: any) {
       console.error("Story upload error:", error)
-      toast.error(error.message || "حدث خطأ أثناء رفع القصة", { id: toastId })
+      bwToast.dismiss(toastId)
+      bwToast.error(error.message || "حدث خطأ أثناء رفع القصة", () => handlePublish())
     } finally {
       setIsUploading(false)
       if (fileInputRef.current) {

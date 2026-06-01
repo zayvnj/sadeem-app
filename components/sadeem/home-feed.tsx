@@ -8,6 +8,7 @@ import { auth } from "@/lib/firebase"
 import { useNavigation } from "./navigation-context"
 import { StoryViewer } from "./story-viewer"
 import { StoryUpload } from "./story-upload"
+import { useStoryNavigation } from "./story/useStoryNavigation"
 
 const container = {
   hidden: { opacity: 0 },
@@ -27,12 +28,9 @@ export function HomeFeed() {
   const [stories, setStories] = useState<any[]>([])
   const [viewedStoryIds, setViewedStoryIds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
-  const { setSelectedUserId } = useNavigation()
-  const [storyViewerData, setStoryViewerData] = useState<{
-    stories: any[],
-    initialIndex: number
-  } | null>(null)
+  const { setSelectedUserId, storyViewerData, setStoryViewerData } = useNavigation()
 
+  const { handleAvatarTap } = useStoryNavigation()
   const [currentUserAvatar, setCurrentUserAvatar] = useState<string | null>(null)
 
   const fetchFeedData = async () => {
@@ -277,14 +275,7 @@ export function HomeFeed() {
               key={firstStory.user_id}
               variants={item}
               className="flex flex-col items-center gap-1.5 shrink-0 cursor-pointer"
-              onClick={() => {
-                // Find first unseen story, or start from beginning if all seen
-                const firstUnseenIndex = userStories.findIndex((s: any) => !viewedStoryIds.has(s.id))
-                setStoryViewerData({
-                  stories: userStories,
-                  initialIndex: firstUnseenIndex >= 0 ? firstUnseenIndex : 0
-                })
-              }}
+              onClick={() => handleAvatarTap(firstStory.user_id)}
             >
               <div className={`rounded-full p-[3px] ${allSeen ? 'bg-muted' : 'bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-500'}`}>
                 <div className="size-16 rounded-full bg-muted flex items-center justify-center overflow-hidden text-lg font-semibold text-muted-foreground border-2 border-background">
