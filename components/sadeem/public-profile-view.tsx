@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import { ChevronRight, Grid3x3, Film, Loader2, BadgeCheck } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { toast } from "sonner"
 import { auth } from "@/lib/firebase"
 
 interface PublicProfileViewProps {
@@ -56,12 +57,16 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
 
       // Check if current user is following
       if (currentUser && currentUser.uid !== userId) {
-        const { data: followData } = await supabase
+        const { data: followData, error: followError } = await supabase
           .from("follows")
           .select("*")
           .eq("follower_id", currentUser.uid)
           .eq("following_id", userId)
-          .single()
+          .maybeSingle()
+
+        if (followError && followError.code !== "PGRST116") {
+          console.error("Error fetching follow status:", followError)
+        }
 
         setIsFollowing(!!followData)
       }
@@ -98,21 +103,30 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
         // Unfollow
         setIsFollowing(false)
         setFollowersCount(c => Math.max(0, c - 1))
-        await supabase
+        const { error } = await supabase
           .from("follows")
           .delete()
           .eq("follower_id", currentUser.uid)
           .eq("following_id", userId)
+
+        if (error) {
+          throw error
+        }
       } else {
         // Follow
         setIsFollowing(true)
         setFollowersCount(c => c + 1)
-        await supabase
+        const { error } = await supabase
           .from("follows")
           .insert({ follower_id: currentUser.uid, following_id: userId })
+
+        if (error) {
+          throw error
+        }
       }
     } catch (error) {
       console.error("Error toggling follow:", error)
+      toast.error("حدث خطأ أثناء تغيير حالة المتابعة")
       fetchProfileData() // Revert on error
     }
   }

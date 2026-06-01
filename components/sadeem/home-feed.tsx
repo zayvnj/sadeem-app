@@ -6,6 +6,8 @@ import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Loader2, BadgeChe
 import { supabase } from "@/lib/supabase"
 import { auth } from "@/lib/firebase"
 import { useNavigation } from "./navigation-context"
+import { StoryViewer } from "./story-viewer"
+import { StoryUpload } from "./story-upload"
 
 const container = {
   hidden: { opacity: 0 },
@@ -23,8 +25,15 @@ const item = {
 export function HomeFeed() {
   const [posts, setPosts] = useState<any[]>([])
   const [stories, setStories] = useState<any[]>([])
+  const [viewedStoryIds, setViewedStoryIds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const { setSelectedUserId } = useNavigation()
+  const [storyViewerData, setStoryViewerData] = useState<{
+    stories: any[],
+    initialIndex: number
+  } | null>(null)
+
+  const [currentUserAvatar, setCurrentUserAvatar] = useState<string | null>(null)
 
   const fetchFeedData = async () => {
     try {
@@ -33,6 +42,17 @@ export function HomeFeed() {
       let followedIds: string[] = []
 
       if (user) {
+        // Fetch current user avatar
+        const { data: userData } = await supabase
+          .from('users')
+          .select('avatar_url')
+          .eq('id', user.uid)
+          .single()
+
+        if (userData?.avatar_url) {
+          setCurrentUserAvatar(userData.avatar_url)
+        }
+
         // Fetch users the current user follows
         const { data: followsData } = await supabase
           .from('follows')
@@ -44,6 +64,16 @@ export function HomeFeed() {
         }
         // Include self
         followedIds.push(user.uid)
+
+        // Fetch viewed stories
+        const { data: viewedData } = await supabase
+          .from('story_views')
+          .select('story_id')
+          .eq('user_id', user.uid)
+
+        if (viewedData) {
+          setViewedStoryIds(new Set(viewedData.map(v => v.story_id)))
+        }
       }
 
       // Fetch posts
@@ -73,11 +103,15 @@ export function HomeFeed() {
         }
       })
 
+      // Filter out expired stories (e.g. 24 hours old)
+      const oneDayAgo = new Date()
+      oneDayAgo.setDate(oneDayAgo.getDate() - 1)
+
       let storiesQuery = supabase
         .from('stories')
         .select('*, users:user_id(id, full_name, username, avatar_url, is_verified)')
-        .order('created_at', { ascending: false })
-        .limit(10)
+        .gt('created_at', oneDayAgo.toISOString())
+        .order('created_at', { ascending: true }) // Grouping will handle recent ordering
 
       if (user && followedIds.length > 0) {
         storiesQuery = storiesQuery.in('user_id', followedIds)
@@ -87,8 +121,24 @@ export function HomeFeed() {
 
       if (storiesError && storiesError.code !== '42P01') console.error('Stories fetch error:', storiesError)
 
+      // Group stories by user
+      const groupedStories: Record<string, any[]> = {}
+      ;(storiesData || []).forEach(story => {
+        if (!groupedStories[story.user_id]) {
+          groupedStories[story.user_id] = []
+        }
+        groupedStories[story.user_id].push(story)
+      })
+
+      // Sort users by their most recent story
+      const userStoryGroups = Object.values(groupedStories).sort((a, b) => {
+        const lastStoryA = a[a.length - 1]
+        const lastStoryB = b[b.length - 1]
+        return new Date(lastStoryB.created_at).getTime() - new Date(lastStoryA.created_at).getTime()
+      })
+
       setPosts(formattedPosts)
-      setStories(storiesData || [])
+      setStories(userStoryGroups)
     } catch (error) {
       console.error('Error fetching feed:', error)
     } finally {
@@ -153,10 +203,6 @@ export function HomeFeed() {
     }
   }
 
-  // Generate fallback UI for when there's no data
-  const fallbackStories = ["قصتك", "نورة", "سالم", "ليان", "تركي"]
-  const displayStories = stories.length > 0 ? stories : fallbackStories
-
   // Exploding Heart Animation state
   const [explodingPostId, setExplodingPostId] = useState<string | null>(null)
 
@@ -172,6 +218,41 @@ export function HomeFeed() {
 
   return (
     <div className="pb-4">
+      {/* Story Viewer Overlay */}
+      <AnimatePresence>
+        {storyViewerData && (
+          <StoryViewer
+            stories={storyViewerData.stories}
+            initialStoryIndex={storyViewerData.initialIndex}
+            onClose={() => {
+              setStoryViewerData(null)
+              fetchFeedData() // Refresh to update seen states
+            }}
+            onComplete={() => {
+              // Find the index of the current user's stories in the main stories array
+              const currentUserStoriesIndex = stories.findIndex(
+                (userGroup) => userGroup[0].user_id === storyViewerData.stories[0].user_id
+              )
+
+              if (currentUserStoriesIndex >= 0 && currentUserStoriesIndex < stories.length - 1) {
+                // Auto-advance to the next user's stories
+                const nextUserStories = stories[currentUserStoriesIndex + 1]
+                const firstUnseenIndex = nextUserStories.findIndex((s: any) => !viewedStoryIds.has(s.id))
+
+                setStoryViewerData({
+                  stories: nextUserStories,
+                  initialIndex: firstUnseenIndex >= 0 ? firstUnseenIndex : 0
+                })
+              } else {
+                // We reached the end of all stories, close viewer
+                setStoryViewerData(null)
+                fetchFeedData()
+              }
+            }}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Stories */}
       <motion.div
         variants={container}
@@ -179,22 +260,36 @@ export function HomeFeed() {
         animate="show"
         className="flex gap-4 overflow-x-auto px-4 py-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        {displayStories.map((story, i) => {
-          const name = typeof story === 'string' ? story : (story.users?.username || story.users?.full_name || 'مستخدم')
-          const isRealStory = typeof story !== 'string'
-          const userId = isRealStory ? story.user_id : null
+        <StoryUpload
+          onUploadComplete={fetchFeedData}
+          userAvatar={currentUserAvatar}
+        />
+
+        {stories.map((userStories) => {
+          const firstStory = userStories[0]
+          const name = firstStory.users?.username || firstStory.users?.full_name || 'مستخدم'
+
+          // Check if all stories from this user are seen
+          const allSeen = userStories.every(s => viewedStoryIds.has(s.id))
 
           return (
             <motion.div
-              key={isRealStory ? story.id : name}
+              key={firstStory.user_id}
               variants={item}
               className="flex flex-col items-center gap-1.5 shrink-0 cursor-pointer"
-              onClick={() => userId && setSelectedUserId(userId)}
+              onClick={() => {
+                // Find first unseen story, or start from beginning if all seen
+                const firstUnseenIndex = userStories.findIndex(s => !viewedStoryIds.has(s.id))
+                setStoryViewerData({
+                  stories: userStories,
+                  initialIndex: firstUnseenIndex >= 0 ? firstUnseenIndex : 0
+                })
+              }}
             >
-              <div className="rounded-full p-[2px] ring-2 ring-foreground">
-                <div className="size-16 rounded-full bg-muted flex items-center justify-center overflow-hidden text-lg font-semibold text-muted-foreground">
-                  {isRealStory && story.users?.avatar_url ? (
-                    <img src={story.users.avatar_url} alt="Story" className="size-full object-cover" />
+              <div className={`rounded-full p-[2px] ring-2 ${allSeen ? 'ring-muted' : 'ring-primary'}`}>
+                <div className="size-16 rounded-full bg-muted flex items-center justify-center overflow-hidden text-lg font-semibold text-muted-foreground ring-2 ring-background">
+                  {firstStory.users?.avatar_url ? (
+                    <img src={firstStory.users.avatar_url} alt="Story" className="size-full object-cover" />
                   ) : (
                     name.charAt(0)
                   )}
