@@ -133,8 +133,9 @@ export function AuthView() {
     } catch (err: any) {
       console.error("[Google Auth] Catch Block Error:", err)
       const code = err?.code || "UNKNOWN_CODE";
+      const message = err?.message || "بدون رسالة";
 
-      let friendlyMessage = "حدث خطأ غير معروف، يرجى المحاولة مجدداً";
+      let friendlyMessage = `حدث خطأ غير معروف: ${message} (Code: ${code})`;
       if (code === "auth/invalid-credential") friendlyMessage = "البريد الإلكتروني أو كلمة المرور غير صحيحة";
       else if (code === "auth/email-already-in-use") friendlyMessage = "هذا البريد الإلكتروني مسجل مسبقاً";
       else if (code === "auth/weak-password") friendlyMessage = "كلمة المرور ضعيفة جداً";
