@@ -17,17 +17,26 @@ android {
         }
     }
     signingConfigs {
+        def keystoreFile = file("sadeem-upload-key.jks")
         release {
-            storeFile file("sadeem-upload-key.jks")
-            storePassword "sadeem123"
-            keyAlias "sadeem"
-            keyPassword "sadeem123"
+            if (keystoreFile.exists()) {
+                storeFile keystoreFile
+                storePassword "sadeem123"
+                keyAlias "sadeem"
+                keyPassword "sadeem123"
+            } else {
+                logger.warn("Custom keystore 'sadeem-upload-key.jks' not found. Falling back to default configuration for release.")
+            }
         }
         debug {
-            storeFile file("sadeem-upload-key.jks")
-            storePassword "sadeem123"
-            keyAlias "sadeem"
-            keyPassword "sadeem123"
+            if (keystoreFile.exists()) {
+                storeFile keystoreFile
+                storePassword "sadeem123"
+                keyAlias "sadeem"
+                keyPassword "sadeem123"
+            } else {
+                logger.warn("Custom keystore 'sadeem-upload-key.jks' not found. Falling back to default configuration for debug.")
+            }
         }
     }
     buildTypes {
