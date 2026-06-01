@@ -5,10 +5,12 @@ import { motion, AnimatePresence } from "framer-motion"
 import { Heart, MessageCircle, Send, Music2, Play, Volume2, VolumeX, Loader2, BadgeCheck } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { auth } from "@/lib/firebase"
+import { useNavigation } from "./navigation-context"
 
 export function ReelsView() {
   const [reels, setReels] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const { setSelectedUserId } = useNavigation()
 
   const fetchReels = async () => {
     try {
@@ -311,16 +313,24 @@ function ReelItem({ reel, handleLike, index }: { reel: any, handleLike: (id: str
       </div>
 
       {/* Caption */}
-      <div className="absolute bottom-24 right-4 left-20 text-white z-30 pointer-events-none flex flex-col gap-2">
+      <div className="absolute bottom-24 right-4 left-20 text-white z-30 flex flex-col gap-2">
         <div className="flex items-center gap-2">
-          {reel.users?.avatar_url ? (
-            <img src={reel.users.avatar_url} alt="" className="size-8 rounded-full object-cover" />
-          ) : (
-            <div className="size-8 rounded-full bg-white/20 flex items-center justify-center font-bold text-white text-xs">
-              {(reel.users?.full_name || reel.users?.username || 'م').charAt(0)}
-            </div>
-          )}
-          <p className="text-sm font-bold flex items-center gap-1 drop-shadow-md">
+          <div
+            className="cursor-pointer pointer-events-auto"
+            onClick={() => reel.user_id && setSelectedUserId(reel.user_id)}
+          >
+            {reel.users?.avatar_url ? (
+              <img src={reel.users.avatar_url} alt="" className="size-8 rounded-full object-cover" />
+            ) : (
+              <div className="size-8 rounded-full bg-white/20 flex items-center justify-center font-bold text-white text-xs">
+                {(reel.users?.full_name || reel.users?.username || 'م').charAt(0)}
+              </div>
+            )}
+          </div>
+          <p
+            className="text-sm font-bold flex items-center gap-1 drop-shadow-md cursor-pointer pointer-events-auto hover:underline"
+            onClick={() => reel.user_id && setSelectedUserId(reel.user_id)}
+          >
             {reel.users?.full_name || reel.users?.username || `@${reel.user_id?.substring(0,8)}`}
             {reel.users?.is_verified && <BadgeCheck className="size-4 text-blue-400 drop-shadow-sm" />}
           </p>

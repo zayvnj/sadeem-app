@@ -35,3 +35,14 @@ WITH CHECK (bucket_id = 'media' AND current_setting('request.headers')::json->>'
 CREATE POLICY "Allow media reads for all"
 ON storage.objects FOR SELECT
 USING (bucket_id = 'media');
+
+-- 5. Follows table
+CREATE TABLE IF NOT EXISTS follows (
+  follower_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  following_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  PRIMARY KEY (follower_id, following_id)
+);
+
+ALTER TABLE follows ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow all operations for testing" ON follows FOR ALL USING (true) WITH CHECK (true);

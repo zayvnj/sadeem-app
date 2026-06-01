@@ -11,8 +11,10 @@ import { ReelsView } from "./reels-view"
 import { AddView } from "./add-view"
 import { ChatView } from "./chat-view"
 import { ProfileView } from "./profile-view"
+import { PublicProfileView } from "./public-profile-view"
 import { AuthView } from "./auth-view"
 import { NotificationsView } from "./notifications-view"
+import { NavigationProvider, useNavigation } from "./navigation-context"
 import type { TabKey } from "./types"
 
 const titles: Record<TabKey, string> = {
@@ -24,11 +26,12 @@ const titles: Record<TabKey, string> = {
   notifications: "الإشعارات",
 }
 
-export function AppShell() {
+function AppShellContent() {
   const [active, setActive] = useState<TabKey>("home")
   const [user, setUser] = useState<User | null>(null)
   const [loadingAuth, setLoadingAuth] = useState(true)
   const [isSingleChatOpen, setIsSingleChatOpen] = useState(false)
+  const { selectedUserId, setSelectedUserId } = useNavigation()
   const isReels = active === "reels"
 
   useEffect(() => {
@@ -115,15 +118,33 @@ export function AppShell() {
               {active === "notifications" && <NotificationsView />}
             </motion.div>
           </AnimatePresence>
+
+          {/* Public Profile View Overlay */}
+          <AnimatePresence>
+            {selectedUserId && (
+              <PublicProfileView
+                userId={selectedUserId}
+                onBack={() => setSelectedUserId(null)}
+              />
+            )}
+          </AnimatePresence>
         </main>
 
         {/* Bottom navigation */}
-        {!isSingleChatOpen && (
+        {!isSingleChatOpen && !selectedUserId && (
           <div className="shrink-0">
             <BottomNav active={active} onChange={setActive} dark={isReels} />
           </div>
         )}
       </div>
     </div>
+  )
+}
+
+export function AppShell() {
+  return (
+    <NavigationProvider>
+      <AppShellContent />
+    </NavigationProvider>
   )
 }

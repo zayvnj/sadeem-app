@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Loader2, BadgeCheck } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { auth } from "@/lib/firebase"
+import { useNavigation } from "./navigation-context"
 
 const container = {
   hidden: { opacity: 0 },
@@ -23,17 +24,41 @@ export function HomeFeed() {
   const [posts, setPosts] = useState<any[]>([])
   const [stories, setStories] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const { setSelectedUserId } = useNavigation()
 
   const fetchFeedData = async () => {
     try {
       const user = auth?.currentUser
 
+      let followedIds: string[] = []
+
+      if (user) {
+        // Fetch users the current user follows
+        const { data: followsData } = await supabase
+          .from('follows')
+          .select('following_id')
+          .eq('follower_id', user.uid)
+
+        if (followsData) {
+          followedIds = followsData.map(f => f.following_id)
+        }
+        // Include self
+        followedIds.push(user.uid)
+      }
+
       // Fetch posts
-      const { data: postsData, error: postsError } = await supabase
+      let postsQuery = supabase
         .from('posts')
         .select('*, users:user_id(id, full_name, username, avatar_url, is_verified), post_likes(user_id)')
         .order('created_at', { ascending: false })
-        .limit(10)
+        .limit(20)
+
+      // If user is logged in, only show their posts and posts of people they follow
+      if (user && followedIds.length > 0) {
+        postsQuery = postsQuery.in('user_id', followedIds)
+      }
+
+      const { data: postsData, error: postsError } = await postsQuery
 
       if (postsError && postsError.code !== '42P01') console.error('Posts fetch error:', postsError)
 
@@ -48,11 +73,17 @@ export function HomeFeed() {
         }
       })
 
-      const { data: storiesData, error: storiesError } = await supabase
+      let storiesQuery = supabase
         .from('stories')
-        .select('*')
+        .select('*, users:user_id(id, full_name, username, avatar_url, is_verified)')
         .order('created_at', { ascending: false })
         .limit(10)
+
+      if (user && followedIds.length > 0) {
+        storiesQuery = storiesQuery.in('user_id', followedIds)
+      }
+
+      const { data: storiesData, error: storiesError } = await storiesQuery
 
       if (storiesError && storiesError.code !== '42P01') console.error('Stories fetch error:', storiesError)
 
@@ -149,13 +180,21 @@ export function HomeFeed() {
         className="flex gap-4 overflow-x-auto px-4 py-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {displayStories.map((story, i) => {
-          const name = typeof story === 'string' ? story : 'مستخدم'
+          const name = typeof story === 'string' ? story : (story.users?.username || story.users?.full_name || 'مستخدم')
+          const isRealStory = typeof story !== 'string'
+          const userId = isRealStory ? story.user_id : null
+
           return (
-            <motion.div key={typeof story === 'string' ? name : story.id} variants={item} className="flex flex-col items-center gap-1.5 shrink-0">
+            <motion.div
+              key={isRealStory ? story.id : name}
+              variants={item}
+              className="flex flex-col items-center gap-1.5 shrink-0 cursor-pointer"
+              onClick={() => userId && setSelectedUserId(userId)}
+            >
               <div className="rounded-full p-[2px] ring-2 ring-foreground">
                 <div className="size-16 rounded-full bg-muted flex items-center justify-center overflow-hidden text-lg font-semibold text-muted-foreground">
-                  {typeof story !== 'string' && story.media_url ? (
-                    <img src={story.media_url} alt="Story" className="size-full object-cover" />
+                  {isRealStory && story.users?.avatar_url ? (
+                    <img src={story.users.avatar_url} alt="Story" className="size-full object-cover" />
                   ) : (
                     name.charAt(0)
                   )}
@@ -179,14 +218,22 @@ export function HomeFeed() {
           {posts.length > 0 ? posts.map((post) => (
             <motion.article key={post.id} variants={item} className="border-b border-border px-4 py-4">
               <div className="flex items-center gap-3">
-                {post.users?.avatar_url ? (
-                  <img src={post.users.avatar_url} alt="" className="size-10 rounded-full object-cover" />
-                ) : (
-                  <div className="size-10 rounded-full bg-muted flex items-center justify-center font-semibold text-muted-foreground overflow-hidden">
-                    {(post.users?.full_name || post.users?.username || 'م').charAt(0)}
-                  </div>
-                )}
-                <div className="flex-1">
+                <div
+                  className="cursor-pointer"
+                  onClick={() => post.user_id && setSelectedUserId(post.user_id)}
+                >
+                  {post.users?.avatar_url ? (
+                    <img src={post.users.avatar_url} alt="" className="size-10 rounded-full object-cover" />
+                  ) : (
+                    <div className="size-10 rounded-full bg-muted flex items-center justify-center font-semibold text-muted-foreground overflow-hidden">
+                      {(post.users?.full_name || post.users?.username || 'م').charAt(0)}
+                    </div>
+                  )}
+                </div>
+                <div
+                  className="flex-1 cursor-pointer"
+                  onClick={() => post.user_id && setSelectedUserId(post.user_id)}
+                >
                   <p className="text-sm font-semibold leading-tight flex items-center gap-1">
                     {post.users?.full_name || post.users?.username || 'مستخدم سديم'}
                     {post.users?.is_verified && <BadgeCheck className="size-4 text-blue-500" />}
