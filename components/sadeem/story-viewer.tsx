@@ -51,11 +51,15 @@ export function StoryViewer({ stories, initialIndex, onClose, onStoryViewed }: S
     trackView()
   }, [currentIndex, currentStory, onStoryViewed])
 
+  const [isPaused, setIsPaused] = useState(false)
+
   // Progress animation
   useEffect(() => {
     setProgress(0)
     startTimeRef.current = performance.now()
+  }, [currentIndex])
 
+  useEffect(() => {
     const animateProgress = (timestamp: number) => {
       if (!startTimeRef.current) startTimeRef.current = timestamp
       const elapsed = timestamp - startTimeRef.current
@@ -69,15 +73,14 @@ export function StoryViewer({ stories, initialIndex, onClose, onStoryViewed }: S
       }
     }
 
-    // Only animate if not typing reply
-    if (!replyText) {
+    if (!isPaused) {
        animationFrameRef.current = requestAnimationFrame(animateProgress)
     }
 
     return () => {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current)
     }
-  }, [currentIndex, replyText])
+  }, [currentIndex, isPaused])
 
   const handleNext = () => {
     if (currentIndex < stories.length - 1) {
@@ -112,6 +115,7 @@ export function StoryViewer({ stories, initialIndex, onClose, onStoryViewed }: S
 
     // Resume progress
     startTimeRef.current = performance.now() - (progress / 100) * storyDuration;
+    setIsPaused(false)
 
     try {
       // Find existing chat or create new one
@@ -224,7 +228,18 @@ export function StoryViewer({ stories, initialIndex, onClose, onStoryViewed }: S
       </div>
 
       {/* Media */}
-      <div className="relative flex-1 bg-black flex items-center justify-center overflow-hidden">
+      <div
+        className="relative flex-1 bg-black flex items-center justify-center overflow-hidden"
+        onPointerDown={() => setIsPaused(true)}
+        onPointerUp={() => {
+           startTimeRef.current = performance.now() - (progress / 100) * storyDuration;
+           setIsPaused(false)
+        }}
+        onPointerLeave={() => {
+           startTimeRef.current = performance.now() - (progress / 100) * storyDuration;
+           setIsPaused(false)
+        }}
+      >
          {currentStory.media_url.match(/\.(mp4|webm|ogg)$/i) ? (
             <video
                src={currentStory.media_url}
@@ -260,11 +275,12 @@ export function StoryViewer({ stories, initialIndex, onClose, onStoryViewed }: S
               placeholder="رد على القصة..."
               className="flex-1 bg-white/20 border border-white/30 rounded-full px-4 py-3 text-white placeholder:text-white/60 focus:outline-none focus:bg-white/30 transition-colors backdrop-blur-md"
               onFocus={() => {
-                 if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current)
+                 setIsPaused(true)
               }}
               onBlur={() => {
                  if (!replyText) {
                     startTimeRef.current = performance.now() - (progress / 100) * storyDuration;
+                    setIsPaused(false)
                  }
               }}
             />
