@@ -42,9 +42,8 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
 
-      - name: Add Android Platform
+      - name: Sync Android Platform
         run: |
-          npx cap add android
           npx cap sync android
 
       - name: Assemble APK
