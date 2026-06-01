@@ -14,3 +14,7 @@ node_modules
 .next/
 .DS_Store
 out/
+
+# Android Keystore
+*.jks
+*.keystore
