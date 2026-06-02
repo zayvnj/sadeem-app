@@ -4,6 +4,28 @@ import { HomeFeed } from '@/components/sadeem/home-feed'
 import { NavigationProvider, useNavigation } from '@/components/sadeem/navigation-context'
 import React from 'react'
 
+jest.mock('@capacitor-community/media', () => ({
+  Media: {
+    getAlbums: jest.fn(() => Promise.resolve({ albums: [] })),
+    getMedias: jest.fn(() => Promise.resolve({ medias: [] }))
+  }
+}))
+
+jest.mock('@capacitor/camera', () => ({
+  Camera: {
+    getPhoto: jest.fn()
+  }
+}))
+
+jest.mock('@capacitor/core', () => ({
+  Capacitor: {
+    isNativePlatform: () => false,
+    convertFileSrc: (src: string) => src,
+    registerPlugin: jest.fn()
+  }
+}))
+
+
 jest.mock('@/lib/supabase', () => ({
   supabase: {
     from: () => ({

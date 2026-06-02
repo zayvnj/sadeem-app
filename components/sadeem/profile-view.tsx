@@ -467,7 +467,7 @@ export function ProfileView() {
 
       <div className="px-4">
         <p className="text-sm font-semibold">{fullName}</p>
-        <p className="mt-1 text-sm text-muted-foreground leading-relaxed">
+        <p className="mt-1 text-sm text-muted-foreground leading-relaxed selectable-text">
           {bio}
         </p>
       </div>

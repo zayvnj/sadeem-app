@@ -8,6 +8,8 @@ import { bwToast } from "./ui/bw-toast"
 import { motion, AnimatePresence } from "framer-motion"
 import { useStoriesStore } from "@/lib/stores/useStoriesStore"
 import { useNavigation } from "./navigation-context"
+import { CustomStoryGallery } from "./custom-story-gallery"
+import { Capacitor } from "@capacitor/core"
 
 interface StoryUploadProps {
   onUploadComplete: () => void
@@ -18,6 +20,8 @@ export function StoryUpload({ onUploadComplete, userAvatar }: StoryUploadProps) 
   const [isUploading, setIsUploading] = useState(false)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [selectedFileType, setSelectedFileType] = useState<"image" | "video" | null>(null)
+  const [showGallery, setShowGallery] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const { addStory } = useStoriesStore()
@@ -76,14 +80,33 @@ export function StoryUpload({ onUploadComplete, userAvatar }: StoryUploadProps) 
     const file = e.target.files?.[0]
     if (!file) return
 
-    if (!file.type.startsWith("image/")) {
-      bwToast.error("يرجى اختيار صورة فقط للقصة")
+    if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
+      bwToast.error("يرجى اختيار صورة أو فيديو للقصة")
       return
     }
 
     setSelectedFile(file)
+    setSelectedFileType(file.type.startsWith("video/") ? "video" : "image")
     const url = URL.createObjectURL(file)
     setPreviewUrl(url)
+    setShowGallery(false)
+  }
+
+  const handleGallerySelect = (file: File, type: "image" | "video") => {
+    setSelectedFile(file)
+    setSelectedFileType(type)
+    const url = URL.createObjectURL(file)
+    setPreviewUrl(url)
+    setShowGallery(false)
+  }
+
+  const handleAddClick = () => {
+    if (isUploading) return
+    if (Capacitor.isNativePlatform()) {
+      setShowGallery(true)
+    } else {
+      fileInputRef.current?.click()
+    }
   }
 
   const handlePublish = async () => {
@@ -99,15 +122,22 @@ export function StoryUpload({ onUploadComplete, userAvatar }: StoryUploadProps) 
     const toastId = bwToast.loading("جاري رفع القصة...")
 
     try {
-      // 1. Compress Image
-      const compressedBlob = await compressImage(selectedFile)
-      const compressedFile = new File([compressedBlob], `story_${Date.now()}.jpg`, { type: 'image/jpeg' })
+      let uploadFile = selectedFile
+      let filePath = `${user.uid}/stories/${Date.now()}`
+
+      if (selectedFileType === 'image') {
+        // 1. Compress Image
+        const compressedBlob = await compressImage(selectedFile)
+        uploadFile = new File([compressedBlob], `story_${Date.now()}.jpg`, { type: 'image/jpeg' })
+        filePath += '.jpg'
+      } else {
+        filePath += '.mp4'
+      }
 
       // 2. Upload to Storage (media bucket)
-      const filePath = `${user.uid}/stories/${Date.now()}.jpg`
       const { error: uploadError } = await supabase.storage
         .from('media')
-        .upload(filePath, compressedFile)
+        .upload(filePath, uploadFile)
 
       if (uploadError) throw uploadError
 
@@ -188,11 +218,22 @@ export function StoryUpload({ onUploadComplete, userAvatar }: StoryUploadProps) 
 
           {/* Media Preview */}
           <div className="flex-1 relative flex items-center justify-center bg-zinc-900">
-            <img
-              src={previewUrl}
-              alt="Story Preview"
-              className="w-full h-full object-cover"
-            />
+            {selectedFileType === 'video' ? (
+              <video
+                src={previewUrl}
+                className="w-full h-full object-cover"
+                autoPlay
+                loop
+                muted
+                playsInline
+              />
+            ) : (
+              <img
+                src={previewUrl}
+                alt="Story Preview"
+                className="w-full h-full object-cover"
+              />
+            )}
           </div>
 
           {/* Footer - "Your Story" Button */}
@@ -221,7 +262,7 @@ export function StoryUpload({ onUploadComplete, userAvatar }: StoryUploadProps) 
     <div className="flex flex-col items-center gap-1.5 shrink-0 relative">
       <div
         className="relative cursor-pointer"
-        onClick={() => !isUploading && fileInputRef.current?.click()}
+        onClick={handleAddClick}
       >
         <div className="rounded-full p-[2px] ring-2 ring-border">
           <div className="size-16 rounded-full bg-muted flex items-center justify-center overflow-hidden">
@@ -272,7 +313,7 @@ export function StoryUpload({ onUploadComplete, userAvatar }: StoryUploadProps) 
             <h2 className="text-xl font-bold">إنشاء قصة</h2>
             <p className="text-muted-foreground">اختر صورة أو فيديو لقصتك</p>
             <button
-              onClick={() => fileInputRef.current?.click()}
+              onClick={handleAddClick}
               className="mt-4 bg-primary text-primary-foreground px-6 py-3 rounded-full font-bold flex items-center gap-2 hover:opacity-90"
             >
               <Plus className="size-5" />
@@ -280,6 +321,15 @@ export function StoryUpload({ onUploadComplete, userAvatar }: StoryUploadProps) 
             </button>
           </div>
         </motion.div>
+      )}
+    </AnimatePresence>
+
+    <AnimatePresence>
+      {showGallery && (
+        <CustomStoryGallery
+          onClose={() => setShowGallery(false)}
+          onSelect={handleGallerySelect}
+        />
       )}
     </AnimatePresence>
     </>
