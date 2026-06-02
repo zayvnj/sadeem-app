@@ -3,21 +3,21 @@
 import { useEffect, useState, useRef } from 'react'
 import { motion, useAnimation, useMotionValue } from 'framer-motion'
 
-type MascotState = 'roaming' | 'resting' | 'flying' | 'sliding' | 'landing_rest' | 'interacted'
+// New precise state machine based on realistic requirements
+type MascotState = 'running' | 'tired' | 'sitting' | 'flying' | 'sliding' | 'landing_rest' | 'interacted'
 type Direction = 'left' | 'right'
 
 export function AstronautMascot({ activeTab, tabsKeys, dark }: { activeTab: string, tabsKeys: string[], dark?: boolean }) {
-  const [state, setState] = useState<MascotState>('roaming')
+  const [state, setState] = useState<MascotState>('running')
   const [direction, setDirection] = useState<Direction>('right')
 
   const x = useMotionValue(0)
-  const y = useMotionValue(0)
+  const y = useMotionValue(0) // Used for flying/jumping. For walking, it's firmly 0.
   const controls = useAnimation()
 
   const activeTabIndexRef = useRef(tabsKeys.indexOf(activeTab))
   const stateRef = useRef(state)
   const isMountedRef = useRef(true)
-  const navContainerRef = useRef<HTMLElement | null>(null)
 
   // Keep refs updated for animation loop access
   useEffect(() => {
@@ -26,13 +26,12 @@ export function AstronautMascot({ activeTab, tabsKeys, dark }: { activeTab: stri
 
   useEffect(() => {
     isMountedRef.current = true
-    navContainerRef.current = document.getElementById('bottom-nav-container')
     return () => {
       isMountedRef.current = false
     }
   }, [])
 
-  // Calculate pixel positions for tabs
+  // Calculate pixel positions for tabs (used for flying/sliding interruptions)
   const getTabPosition = (index: number) => {
     if (typeof window === 'undefined') return 0
     const tabEl = document.getElementById(`nav-tab-${index}`)
@@ -42,7 +41,6 @@ export function AstronautMascot({ activeTab, tabsKeys, dark }: { activeTab: stri
       const navRect = navEl.getBoundingClientRect()
       return tabRect.left - navRect.left + (tabRect.width / 2)
     }
-    // Fallback: assume equal distribution
     const w = typeof window !== 'undefined' ? window.innerWidth : 400
     return (w / tabsKeys.length) * (index + 0.5)
   }
@@ -53,7 +51,7 @@ export function AstronautMascot({ activeTab, tabsKeys, dark }: { activeTab: stri
     const newIndex = tabsKeys.indexOf(activeTab)
     activeTabIndexRef.current = newIndex
 
-    if (prevIndex === newIndex) return // No change
+    if (prevIndex === newIndex) return
 
     const interruptAndMove = async () => {
       if (!isMountedRef.current) return
@@ -61,7 +59,6 @@ export function AstronautMascot({ activeTab, tabsKeys, dark }: { activeTab: stri
       const currentX = x.get()
       const targetX = getTabPosition(newIndex)
 
-      // Determine how far the new tab is from the current position roughly in terms of "tabs"
       const w = typeof window !== 'undefined' ? window.innerWidth : 400
       const tabWidth = w / tabsKeys.length
       const distanceInTabs = Math.abs(targetX - currentX) / tabWidth
@@ -71,7 +68,7 @@ export function AstronautMascot({ activeTab, tabsKeys, dark }: { activeTab: stri
       setDirection(targetX > currentX ? 'right' : 'left')
 
       if (distanceInTabs > 1.5) {
-        // Fly (Jetpack)
+        // Fly (Jetpack) - brief interruption
         setState('flying')
         await controls.start({
           x: targetX - 32, // Center the 64px wide mascot
@@ -79,7 +76,7 @@ export function AstronautMascot({ activeTab, tabsKeys, dark }: { activeTab: stri
           transition: { duration: 0.8, ease: "easeInOut", times: [0, 0.4, 0.8, 1] }
         })
       } else {
-        // Slide (Agile dash)
+        // Slide (Agile dash) - brief interruption
         setState('sliding')
         await controls.start({
           x: targetX - 32,
@@ -90,14 +87,13 @@ export function AstronautMascot({ activeTab, tabsKeys, dark }: { activeTab: stri
 
       if (!isMountedRef.current) return
 
-      // Landing rest
+      // Brief landing rest before resuming routine
       setState('landing_rest')
-      controls.set({ y: 10 }) // Sit down a bit
-      await new Promise(r => setTimeout(r, 2500))
-      controls.set({ y: 0 })
+      controls.set({ y: 0 }) // Keep feet strictly on the ground
+      await new Promise(r => setTimeout(r, 1000))
 
       if (!isMountedRef.current) return
-      setState('roaming')
+      setState('running')
       triggerRoutine() // Restart routine
     }
 
@@ -105,76 +101,77 @@ export function AstronautMascot({ activeTab, tabsKeys, dark }: { activeTab: stri
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab])
 
-  // Main Routine Trigger
+  // --- Real-world State Machine Routine ---
   const triggerRoutineRef = useRef<() => void>(() => {})
 
   useEffect(() => {
     const routine = async () => {
       while (isMountedRef.current) {
-        if (stateRef.current !== 'roaming' && stateRef.current !== 'resting') {
-          // Waiting for external interruption (flying/sliding) to finish
-          await new Promise(r => setTimeout(r, 1000))
+        // Wait if interrupted by user action (flying/sliding/interacted)
+        if (['flying', 'sliding', 'interacted', 'landing_rest'].includes(stateRef.current)) {
+          await new Promise(r => setTimeout(r, 500))
           continue
         }
 
-        // --- Roaming Phase ---
-        setState('roaming')
-        const roamDuration = 10000 + Math.random() * 5000 // 10-15s
+        // --- 1. Running Phase (20 seconds) ---
+        setState('running')
+        const runDuration = 20000
         const startTime = Date.now()
+        let currentDir = direction
 
-        while (Date.now() - startTime < roamDuration && stateRef.current === 'roaming' && isMountedRef.current) {
+        while (Date.now() - startTime < runDuration && stateRef.current === 'running' && isMountedRef.current) {
            const w = window.innerWidth
-           const targetX = Math.random() > 0.5 ? w - 80 : 20
+           const mascotWidth = 64
+           const boundsLeft = 0
+           const boundsRight = w - mascotWidth
+
            const currentX = x.get()
 
-           setDirection(targetX > currentX ? 'right' : 'left')
-           const dist = Math.abs(targetX - currentX)
-           const time = (dist / w) * 8 // Base speed
+           // If we reached an edge, turn around
+           if (currentDir === 'right' && currentX >= boundsRight - 5) currentDir = 'left'
+           if (currentDir === 'left' && currentX <= boundsLeft + 5) currentDir = 'right'
 
+           setDirection(currentDir)
+
+           const targetX = currentDir === 'right' ? boundsRight : boundsLeft
+           const dist = Math.abs(targetX - currentX)
+           const time = (dist / w) * 10 // Fixed comfortable running speed
+
+           // Start moving towards the wall. We await a fraction of the time, or until wall is hit.
+           // To allow the loop to re-check duration, we move in small chunks or just rely on the wall hit.
            await controls.start({
              x: targetX,
-             y: 0,
+             y: 0, // STRICTLY 0
              transition: { duration: time, ease: "linear" }
            })
         }
 
-        if (stateRef.current !== 'roaming' || !isMountedRef.current) continue
+        if (stateRef.current !== 'running' || !isMountedRef.current) continue
 
-        // --- Resting Phase ---
-        // Pick an unselected tab
-        const unselectedIndices = tabsKeys.map((_, i) => i).filter(i => i !== activeTabIndexRef.current)
-        const restIndex = unselectedIndices[Math.floor(Math.random() * unselectedIndices.length)]
-        const targetX = getTabPosition(restIndex)
+        // --- 2. Tired Phase (5 seconds) ---
+        setState('tired')
+        controls.stop() // Stop running movement
 
-        // Walk to rest pos
-        const currentX = x.get()
-        setDirection(targetX > currentX ? 'right' : 'left')
-        const dist = Math.abs(targetX - currentX)
-        const w = window.innerWidth
-        await controls.start({
-          x: targetX - 32,
-          y: 0,
-          transition: { duration: (dist / w) * 3, ease: "easeInOut" }
-        })
-
-        if (stateRef.current !== 'roaming' || !isMountedRef.current) continue
-
-        setState('resting')
-        controls.set({ y: 12 }) // Sit down
-
-        // Face center or randomly
-        setDirection(targetX > w/2 ? 'left' : 'right')
-
-        // Rest for 5s
-        let restTime = 0
-        while(restTime < 5000 && (stateRef.current as string) === 'resting' && isMountedRef.current) {
+        let tiredTime = 0
+        while(tiredTime < 5000 && stateRef.current === 'tired' && isMountedRef.current) {
            await new Promise(r => setTimeout(r, 500))
-           restTime += 500
+           tiredTime += 500
         }
 
-        if ((stateRef.current as string) === 'resting') {
-           controls.set({ y: 0 }) // Stand up
-           setState('roaming')
+        if (stateRef.current !== 'tired' || !isMountedRef.current) continue
+
+        // --- 3. Sitting Phase (10 seconds) ---
+        setState('sitting')
+        // We stay at current X, Y stays 0 (SVG handles the leg dangle natively)
+
+        let sittingTime = 0
+        while(sittingTime < 10000 && stateRef.current === 'sitting' && isMountedRef.current) {
+           await new Promise(r => setTimeout(r, 500))
+           sittingTime += 500
+        }
+
+        if (stateRef.current === 'sitting') {
+           setState('running')
         }
       }
     }
@@ -183,11 +180,10 @@ export function AstronautMascot({ activeTab, tabsKeys, dark }: { activeTab: stri
        // Fire and forget, loop handles it
     }
 
-    // Start initial
     routine()
 
     return () => { isMountedRef.current = false }
-  }, [controls, tabsKeys, x])
+  }, [controls, x, direction])
 
   const triggerRoutine = () => triggerRoutineRef.current()
 
@@ -197,7 +193,7 @@ export function AstronautMascot({ activeTab, tabsKeys, dark }: { activeTab: stri
     setState('interacted')
     controls.stop()
 
-    // Anti-gravity jump
+    // Jump interaction (Y axis changes temporarily, then returns strictly to 0)
     await controls.start({
       y: [-10, -50, -40, 0],
       rotate: [0, 360],
@@ -205,21 +201,27 @@ export function AstronautMascot({ activeTab, tabsKeys, dark }: { activeTab: stri
     })
 
     if (isMountedRef.current) {
-       setState(prevState === 'landing_rest' || prevState === 'resting' ? 'resting' : 'roaming')
-       if (prevState === 'resting' || prevState === 'landing_rest') controls.set({ y: 12 })
+       setState(prevState === 'landing_rest' || prevState === 'sitting' ? 'sitting' : 'running')
+       controls.set({ y: 0 }) // Strictly back to floor
+       controls.set({ rotate: 0 })
     }
   }
 
-  // Visuals computation based on state
-  const isWalking = state === 'roaming' || state === 'sliding'
-  const isSitting = state === 'resting' || state === 'landing_rest'
-  const isFlying = state === 'flying'
+  // --- Visuals computation based on state ---
+  const isRunning = state === 'running' || state === 'sliding'
+  const isTired = state === 'tired'
+  const isSitting = state === 'sitting' || state === 'landing_rest'
+  const isFlying = state === 'flying' || state === 'interacted'
 
   return (
-    <div className="absolute left-0 right-0 pointer-events-none z-[100] w-full h-0" style={{ bottom: '100%' }}>
+    <div className="absolute left-0 right-0 pointer-events-none z-[100] w-full h-0" style={{ bottom: 'calc(100% - 2px)' }}>
       <motion.div
         className="absolute bottom-0 w-16 h-16 origin-bottom pointer-events-auto cursor-pointer"
-        style={{ x, y }}
+        style={{
+            x,
+            y,
+            willChange: 'transform' // Hardware acceleration for anti-jitter
+        }}
         animate={controls}
         initial={{ x: 20, y: 0 }}
         onClick={handleInteract}
@@ -230,6 +232,7 @@ export function AstronautMascot({ activeTab, tabsKeys, dark }: { activeTab: stri
             className="w-full h-full origin-bottom relative"
             animate={{ scaleX: direction === 'left' ? -1 : 1 }}
             transition={{ duration: 0.3 }}
+            style={{ willChange: 'transform' }}
         >
              {/* Dynamic Flashlight in Dark Mode */}
              {dark && (
@@ -293,20 +296,22 @@ export function AstronautMascot({ activeTab, tabsKeys, dark }: { activeTab: stri
                         <motion.g
                             style={{ transformOrigin: '40px 75px' }}
                             animate={
-                                isWalking
-                                  ? { rotate: [25, -25, 25] }
-                                  : isSitting
-                                    ? { rotate: [-50, -30, -50] }
-                                    : isFlying
-                                      ? { rotate: -10 }
-                                      : { rotate: 0 }
+                                isRunning
+                                  ? { rotate: [30, -30, 30] } // Running stride
+                                  : isTired
+                                    ? { rotate: 5, y: 2 } // Legs slightly buckled when tired
+                                    : isSitting
+                                      ? { rotate: -80, y: 5 } // Sitting 90 deg forward (dangling)
+                                      : isFlying
+                                        ? { rotate: -10 }
+                                        : { rotate: 0 }
                             }
                             transition={
-                                isWalking
-                                  ? { repeat: Infinity, duration: state === 'sliding' ? 0.2 : 0.5, ease: "linear" }
+                                isRunning
+                                  ? { repeat: Infinity, duration: state === 'sliding' ? 0.2 : 0.6, ease: "linear" }
                                   : isSitting
-                                    ? { repeat: Infinity, duration: 3, ease: "easeInOut", delay: 0.5 }
-                                    : { duration: 0.2 }
+                                    ? { duration: 0.5, ease: "easeInOut" }
+                                    : { duration: 0.3 }
                             }
                         >
                             <path d="M 40 75 L 35 95" stroke="url(#suitGrad)" strokeWidth="14" strokeLinecap="round" />
@@ -318,20 +323,22 @@ export function AstronautMascot({ activeTab, tabsKeys, dark }: { activeTab: stri
                         <motion.g
                             style={{ transformOrigin: '60px 75px' }}
                             animate={
-                                isWalking
-                                  ? { rotate: [-25, 25, -25] }
-                                  : isSitting
-                                    ? { rotate: [-60, -40, -60] }
-                                    : isFlying
-                                      ? { rotate: -20 }
-                                      : { rotate: 0 }
+                                isRunning
+                                  ? { rotate: [-30, 30, -30] } // Running stride opposing
+                                  : isTired
+                                    ? { rotate: -5, y: 2 } // Tired buckle
+                                    : isSitting
+                                      ? { rotate: -70, y: 5 } // Sitting dangling (offset slightly from back leg for perspective)
+                                      : isFlying
+                                        ? { rotate: -20 }
+                                        : { rotate: 0 }
                             }
                             transition={
-                                isWalking
-                                  ? { repeat: Infinity, duration: state === 'sliding' ? 0.2 : 0.5, ease: "linear" }
+                                isRunning
+                                  ? { repeat: Infinity, duration: state === 'sliding' ? 0.2 : 0.6, ease: "linear" }
                                   : isSitting
-                                    ? { repeat: Infinity, duration: 3, ease: "easeInOut" }
-                                    : { duration: 0.2 }
+                                    ? { duration: 0.5, ease: "easeInOut" }
+                                    : { duration: 0.3 }
                             }
                         >
                              <path d="M 60 75 L 65 95" stroke="url(#suitGrad)" strokeWidth="14" strokeLinecap="round" />
@@ -344,26 +351,38 @@ export function AstronautMascot({ activeTab, tabsKeys, dark }: { activeTab: stri
                     <motion.g
                         style={{ transformOrigin: '50px 80px' }}
                         animate={
-                            isWalking
-                                ? { y: [0, -3, 0] }
-                                : isFlying
-                                  ? { rotate: 15 }
-                                  : { y: 0, rotate: 0 }
+                            isRunning
+                                ? { y: [0, -4, 0] } // Running bounce
+                                : isTired
+                                  ? { rotate: 15, y: [4, 6, 4] } // Hunch forward, heavy breathing
+                                  : isSitting
+                                    ? { y: 15, rotate: 5 } // Drop down to sit, slight slouch
+                                    : isFlying
+                                      ? { rotate: 15 }
+                                      : { y: 0, rotate: 0 }
                         }
                         transition={
-                            isWalking
-                                ? { repeat: Infinity, duration: state === 'sliding' ? 0.2 : 0.5, ease: "easeInOut" }
-                                : { duration: 0.2 }
+                            isRunning
+                                ? { repeat: Infinity, duration: state === 'sliding' ? 0.2 : 0.6, ease: "easeInOut" }
+                                : isTired
+                                  ? { repeat: Infinity, duration: 1.5, ease: "easeInOut" } // Panting loop
+                                  : isSitting
+                                    ? { duration: 0.5, ease: "easeOut" }
+                                    : { duration: 0.2 }
                         }
                     >
                         {/* Arms (Back) */}
                         <motion.g
                              style={{ transformOrigin: '35px 55px' }}
                              animate={
-                                 isWalking ? { rotate: [40, -40, 40] } : isSitting ? { rotate: 20 } : isFlying ? { rotate: -30 } : { rotate: 0 }
+                                 isRunning ? { rotate: [45, -45, 45] }
+                                 : isTired ? { rotate: 10 } // Arm hanging low
+                                 : isSitting ? { rotate: 20 }
+                                 : isFlying ? { rotate: -30 }
+                                 : { rotate: 0 }
                              }
                              transition={
-                                 isWalking ? { repeat: Infinity, duration: state === 'sliding' ? 0.2 : 0.5, ease: "linear" } : { duration: 0.3 }
+                                 isRunning ? { repeat: Infinity, duration: state === 'sliding' ? 0.2 : 0.6, ease: "linear" } : { duration: 0.3 }
                              }
                         >
                             <path d="M 35 55 L 25 75" stroke="url(#suitGrad)" strokeWidth="12" strokeLinecap="round" />
@@ -392,10 +411,14 @@ export function AstronautMascot({ activeTab, tabsKeys, dark }: { activeTab: stri
                         <motion.g
                              style={{ transformOrigin: '65px 55px' }}
                              animate={
-                                 isWalking ? { rotate: [-40, 40, -40] } : isSitting ? { rotate: -20 } : isFlying ? { rotate: 50, x: -10, y: -10 } : { rotate: 0 }
+                                 isRunning ? { rotate: [-45, 45, -45] }
+                                 : isTired ? { rotate: 30, x: 2, y: 5 } // Hand on knee/slouched
+                                 : isSitting ? { rotate: -20, x: -5, y: 5 } // Resting in lap
+                                 : isFlying ? { rotate: 50, x: -10, y: -10 }
+                                 : { rotate: 0 }
                              }
                              transition={
-                                 isWalking ? { repeat: Infinity, duration: state === 'sliding' ? 0.2 : 0.5, ease: "linear" } : { duration: 0.3 }
+                                 isRunning ? { repeat: Infinity, duration: state === 'sliding' ? 0.2 : 0.6, ease: "linear" } : { duration: 0.3 }
                              }
                         >
                             <path d="M 65 55 L 75 75" stroke="url(#suitGrad)" strokeWidth="12" strokeLinecap="round" />
@@ -404,47 +427,56 @@ export function AstronautMascot({ activeTab, tabsKeys, dark }: { activeTab: stri
                         </motion.g>
 
                         {/* Head/Helmet Base */}
-                        <ellipse cx="50" cy="35" rx="35" ry="32" fill="url(#helmetGrad)" />
+                        <motion.g
+                            style={{ transformOrigin: '50px 35px' }}
+                            animate={
+                                isTired ? { rotate: [0, -5, 0], y: [0, 2, 0] } : { rotate: 0, y: 0 }
+                            }
+                            transition={
+                                isTired ? { repeat: Infinity, duration: 1.5, ease: "easeInOut" } : { duration: 0.3 }
+                            }
+                        >
+                            <ellipse cx="50" cy="35" rx="35" ry="32" fill="url(#helmetGrad)" />
 
-                        {/* Helmet Rings/Details */}
-                        <path d="M 15 35 A 35 32 0 0 0 85 35" stroke="#9ca3af" strokeWidth="2" fill="none" opacity="0.6" />
-                        <ellipse cx="50" cy="35" rx="38" ry="35" fill="none" stroke={dark ? "rgba(6, 182, 212, 0.2)" : "none"} strokeWidth="2" />
+                            {/* Helmet Rings/Details */}
+                            <path d="M 15 35 A 35 32 0 0 0 85 35" stroke="#9ca3af" strokeWidth="2" fill="none" opacity="0.6" />
+                            <ellipse cx="50" cy="35" rx="38" ry="35" fill="none" stroke={dark ? "rgba(6, 182, 212, 0.2)" : "none"} strokeWidth="2" />
 
-                        {/* Visor */}
-                        <ellipse cx="48" cy="35" rx="26" ry="20" fill="url(#visorGrad)" />
+                            {/* Visor */}
+                            <ellipse cx="48" cy="35" rx="26" ry="20" fill="url(#visorGrad)" />
 
-                        {/* Glossy Highlights on Visor */}
-                        <path d="M 30 25 Q 45 15 60 20" stroke="#ffffff" strokeWidth="4" strokeLinecap="round" fill="none" opacity="0.7" />
-                        <path d="M 68 35 A 6 6 0 0 1 65 45" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" fill="none" opacity="0.4" />
+                            {/* Glossy Highlights on Visor */}
+                            <path d="M 30 25 Q 45 15 60 20" stroke="#ffffff" strokeWidth="4" strokeLinecap="round" fill="none" opacity="0.7" />
+                            <path d="M 68 35 A 6 6 0 0 1 65 45" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" fill="none" opacity="0.4" />
 
-                        {/* Neon HUD Text inside Visor (Dark Mode) */}
-                        {dark && (
-                            <motion.text
+                            {/* Sharp, integrated zain. text inside Visor */}
+                            <text
                                 x="48"
-                                y="40"
-                                fontFamily="monospace"
-                                fontWeight="900"
-                                fontSize="11"
-                                fill="#a5f3fc"
+                                y="39"
+                                fontFamily="'Arial', sans-serif"
+                                fontWeight="bold"
+                                fontSize="12"
+                                fill={dark ? "#a5f3fc" : "#e0f2fe"}
                                 textAnchor="middle"
-                                style={{ filter: 'drop-shadow(0px 0px 4px #06b6d4)' }}
-                                animate={{ opacity: [0.7, 1, 0.7] }}
-                                transition={{ repeat: Infinity, duration: 2 }}
+                                style={{
+                                    filter: dark ? 'drop-shadow(0px 0px 3px #06b6d4)' : 'none',
+                                    userSelect: 'none'
+                                }}
                             >
-                                zain
-                            </motion.text>
-                        )}
+                                zain.
+                            </text>
 
-                        {/* Antenna */}
-                        <path d="M 22 15 Q 15 5 10 10" stroke="#9ca3af" strokeWidth="3" strokeLinecap="round" fill="none" />
-                        <circle cx="10" cy="10" r="4" fill={dark ? "#06b6d4" : "#ef4444"} />
-                        {dark && (
-                            <motion.circle
-                                cx="10" cy="10" r="6" fill="none" stroke="#06b6d4" strokeWidth="1"
-                                animate={{ scale: [1, 2], opacity: [1, 0] }}
-                                transition={{ repeat: Infinity, duration: 1.5 }}
-                            />
-                        )}
+                            {/* Antenna */}
+                            <path d="M 22 15 Q 15 5 10 10" stroke="#9ca3af" strokeWidth="3" strokeLinecap="round" fill="none" />
+                            <circle cx="10" cy="10" r="4" fill={dark ? "#06b6d4" : "#ef4444"} />
+                            {dark && (
+                                <motion.circle
+                                    cx="10" cy="10" r="6" fill="none" stroke="#06b6d4" strokeWidth="1"
+                                    animate={{ scale: [1, 2], opacity: [1, 0] }}
+                                    transition={{ repeat: Infinity, duration: 1.5 }}
+                                />
+                            )}
+                        </motion.g>
 
                     </motion.g>
                 </svg>
