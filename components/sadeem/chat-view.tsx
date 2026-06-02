@@ -234,7 +234,13 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
       return;
     }
 
-    const replyContent = replyingTo ? `[رد على: ${replyingTo.content.substring(0, 30)}...] ${newMessage}` : newMessage
+    // New struct: [REPLY|msgId|senderId|quotedText] Actual message
+    // senderName can be fetched or we store senderId.
+    // However, to keep it simple and robust, we can just store the original text and sender name in the prefix
+    const senderNameRaw = replyingTo?.sender_id === currentUser?.uid ? 'أنت' : (activeChat.user?.full_name || activeChat.user?.username || 'مستخدم')
+    const senderName = senderNameRaw.replace(/\|/g, '')
+    const quotedText = replyingTo ? replyingTo.content.replace(/\[REPLY\|.*?\]\s*/, '').substring(0, 50).replace(/\|/g, '') + '...' : ''
+    const replyContent = replyingTo ? `[REPLY|${replyingTo.id}|${senderName}|${quotedText}] ${newMessage}` : newMessage
 
     const tempMessage = {
       id: Date.now().toString(),
@@ -306,6 +312,7 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
               return (
                 <motion.div
                   key={msg.id}
+                  id={`msg-${msg.id}`}
                   initial={{ opacity: 0, scale: 0.9, y: 10 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   transition={{ type: "spring", stiffness: 400, damping: 25 }}
@@ -344,7 +351,51 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
                         if (timer) clearTimeout(parseInt(timer))
                       }}
                     >
-                      {msg.content}
+                      {/* Reply Parser */}
+                      {(() => {
+                        const replyMatch = msg.content.match(/^\[REPLY\|(.*?)\|(.*?)\|(.*?)\]\s*([\s\S]*)$/);
+                        if (replyMatch) {
+                           const [_, replyId, replyName, replyText, actualMessage] = replyMatch;
+                           return (
+                             <div className="flex flex-col gap-1">
+                               <div
+                                 onClick={(e) => {
+                                    e.stopPropagation();
+                                    const target = document.getElementById(`msg-${replyId}`);
+                                    if (target) {
+                                      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                      target.animate([
+                                        { backgroundColor: 'rgba(59, 130, 246, 0.3)' },
+                                        { backgroundColor: 'transparent' }
+                                      ], { duration: 1500 });
+                                    }
+                                 }}
+                                 className={`flex flex-col border-l-2 border-primary bg-background/10 rounded-r-md px-2 py-1 -mx-2 -mt-1 cursor-pointer hover:bg-background/20 transition-colors ${isMe ? 'border-primary' : 'border-primary'}`}
+                               >
+                                 <span className="text-xs font-bold text-primary truncate">{replyName}</span>
+                                 <span className="text-xs truncate opacity-80">{replyText}</span>
+                               </div>
+                               <span>{actualMessage}</span>
+                             </div>
+                           )
+                        } else if (msg.content.startsWith('[رد على: ')) {
+                           // Legacy format parsing
+                           const legacyMatch = msg.content.match(/^\[رد على: (.*?)\]\s*([\s\S]*)$/);
+                           if (legacyMatch) {
+                              return (
+                                <div className="flex flex-col gap-1">
+                                 <div className={`flex flex-col border-l-2 border-primary bg-background/10 rounded-r-md px-2 py-1 -mx-2 -mt-1`}>
+                                   <span className="text-xs font-bold text-primary truncate">مستخدم</span>
+                                   <span className="text-xs truncate opacity-80">{legacyMatch[1]}</span>
+                                 </div>
+                                 <span>{legacyMatch[2]}</span>
+                               </div>
+                              )
+                           }
+                        }
+
+                        return msg.content;
+                      })()}
                     </div>
 
                     <AnimatePresence>
@@ -392,16 +443,20 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
                 initial={{ opacity: 0, y: 10, height: 0 }}
                 animate={{ opacity: 1, y: 0, height: 'auto' }}
                 exit={{ opacity: 0, y: 10, height: 0 }}
-                className="flex items-center justify-between bg-secondary/50 rounded-lg p-2.5 mx-1"
+                className="flex items-center justify-between bg-primary/10 border-l-4 border-primary rounded-r-lg p-2.5 mx-1"
               >
                 <div className="flex flex-col flex-1 overflow-hidden">
-                  <span className="text-xs font-bold text-foreground mb-0.5">الرد على رسالة</span>
-                  <span className="text-xs text-muted-foreground truncate">{replyingTo.content}</span>
+                  <span className="text-xs font-bold text-primary mb-0.5">
+                    الرد على {replyingTo.sender_id === currentUser?.uid ? 'أنت' : (activeChat.user?.full_name || activeChat.user?.username || 'مستخدم')}
+                  </span>
+                  <span className="text-xs text-foreground/80 truncate">
+                    {replyingTo.content.replace(/\[REPLY\|.*?\]\s*/, '').replace(/^\[رد على: (.*?)\]\s*/, '')}
+                  </span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setReplyingTo(null)}
-                  className="p-1.5 hover:bg-background rounded-full transition-colors ml-1"
+                  className="p-1.5 hover:bg-background/50 rounded-full transition-colors ml-1"
                 >
                   <X className="size-4" />
                 </button>
