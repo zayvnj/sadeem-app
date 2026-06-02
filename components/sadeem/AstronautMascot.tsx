@@ -122,7 +122,8 @@ export function AstronautMascot({ activeTab, tabsKeys, dark }: { activeTab: stri
 
         while (Date.now() - startTime < runDuration && stateRef.current === 'running' && isMountedRef.current) {
            const navEl = document.getElementById('bottom-nav-container')
-           const w = navEl ? navEl.getBoundingClientRect().width : (typeof window !== 'undefined' ? window.innerWidth : 400)
+           const parentEl = navEl?.parentElement || navEl;
+           const w = parentEl ? parentEl.getBoundingClientRect().width : (typeof window !== 'undefined' ? window.innerWidth : 400)
            const mascotWidth = 64
            const boundsLeft = 0
            const boundsRight = w - mascotWidth
@@ -216,7 +217,7 @@ export function AstronautMascot({ activeTab, tabsKeys, dark }: { activeTab: stri
   const isFlying = state === 'flying' || state === 'interacted'
 
   return (
-    <div className="absolute left-0 right-0 pointer-events-none z-[100] w-full h-0" style={{ bottom: 'calc(100% - 2px)' }}>
+    <div className="absolute left-0 right-0 pointer-events-none z-[200] w-full h-0" style={{ bottom: 'calc(100% - 2px)' }}>
       <motion.div
         className="absolute bottom-0 w-16 h-16 origin-bottom pointer-events-auto cursor-pointer"
         style={{
