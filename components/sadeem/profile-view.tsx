@@ -23,6 +23,7 @@ import { toast } from "sonner"
 import { compressImage } from "@/lib/utils"
 import { Preferences } from "@capacitor/preferences"
 import { useTheme } from "next-themes"
+import { useStoryNavigation } from "./story/useStoryNavigation"
 
 const tabs = [
   { icon: Grid3x3, key: "grid" },
@@ -62,6 +63,7 @@ export function ProfileView() {
   // Settings view states
   const [activeSettingsView, setActiveSettingsView] = useState<string>("main")
   const { theme, setTheme } = useTheme()
+  const { handleAvatarTap } = useStoryNavigation()
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -441,12 +443,15 @@ export function ProfileView() {
         animate={{ opacity: 1, y: 0 }}
         className="flex items-center gap-5 px-4 py-5"
       >
-        <div className="rounded-full p-[3px] ring-2 ring-foreground shrink-0">
+        <div
+          className="rounded-full p-[3px] ring-2 ring-foreground shrink-0 cursor-pointer transition-transform active:scale-95"
+          onClick={() => currentUser && handleAvatarTap(currentUser.uid)}
+        >
           <div className="flex size-20 items-center justify-center rounded-full bg-muted text-2xl font-bold text-muted-foreground overflow-hidden">
             {profile?.avatar_url ? (
-              <img src={profile.avatar_url} alt="Avatar" className="size-full object-cover" />
+              <img src={profile.avatar_url} alt="Avatar" className="size-full object-cover pointer-events-none" />
             ) : (
-              <User className="size-10" />
+              <User className="size-10 pointer-events-none" />
             )}
           </div>
         </div>
