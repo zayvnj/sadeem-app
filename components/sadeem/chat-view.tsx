@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { motion, AnimatePresence } from "framer-motion"
-import { Sparkles, Search, Send, ArrowRight, Loader2, BadgeCheck } from "lucide-react"
+import { motion, AnimatePresence, useAnimation } from "framer-motion"
+import { Sparkles, Search, Send, ArrowRight, Loader2, BadgeCheck, Reply, Copy, X } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { auth } from "@/lib/firebase"
 import { useNavigation } from "./navigation-context"
@@ -31,6 +31,8 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
   const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<any[]>([])
   const currentUser = auth?.currentUser
+  const [replyingTo, setReplyingTo] = useState<any | null>(null)
+  const [activeLongPressId, setActiveLongPressId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchChats()
@@ -232,11 +234,13 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
       return;
     }
 
+    const replyContent = replyingTo ? `[رد على: ${replyingTo.content.substring(0, 30)}...] ${newMessage}` : newMessage
+
     const tempMessage = {
       id: Date.now().toString(),
       chat_id: activeChat.id,
       sender_id: currentUser.uid,
-      content: newMessage,
+      content: replyContent,
       created_at: new Date().toISOString()
     }
 
@@ -244,7 +248,8 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
       const { error } = await supabase.from('messages').insert({
         chat_id: activeChat.id,
         sender_id: currentUser.uid,
-        content: tempMessage.content
+        content: replyContent,
+        // In a real app we would have a reply_to_id column, but using content prefix for now
       })
 
       if (error) {
@@ -254,6 +259,7 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
 
       setMessages((prev) => [...prev, tempMessage])
       setNewMessage("")
+      setReplyingTo(null)
     } catch (error) {
       alert("Insert Error: " + JSON.stringify(error))
       console.error('Error sending message:', error)
@@ -262,13 +268,14 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
 
   if (activeChat) {
     return (
-      <div className="flex flex-col h-full bg-background relative pb-20">
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-border sticky top-0 bg-background z-10">
-          <button onClick={() => { setActiveChat(null); if (onChatOpenStateChange) onChatOpenStateChange(false); }} className="p-2 -mr-2 rounded-full hover:bg-secondary">
+      <div className="flex flex-col bg-background fixed inset-0 z-[100] safe-area-top">
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-border sticky top-0 bg-background z-10 shadow-sm">
+          <button onClick={() => { setActiveChat(null); if (onChatOpenStateChange) onChatOpenStateChange(false); }} className="p-2 -mr-2 rounded-full hover:bg-secondary transition-colors">
             <ArrowRight className="size-5" />
           </button>
+
           <div
-            className="cursor-pointer"
+            className="flex items-center gap-3 flex-1 cursor-pointer hover:bg-secondary/50 rounded-lg p-1 -ml-1 transition-colors"
             onClick={() => activeChat.user?.id && setSelectedUserId(activeChat.user.id)}
           >
             {activeChat.user?.avatar_url ? (
@@ -278,31 +285,99 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
                 {(activeChat.user?.full_name || activeChat.user?.username || "م").charAt(0)}
               </div>
             )}
-          </div>
-          <div
-            className="flex flex-col cursor-pointer"
-            onClick={() => activeChat.user?.id && setSelectedUserId(activeChat.user.id)}
-          >
-            <span className="font-semibold text-sm flex items-center gap-1 hover:underline">
-              {activeChat.user?.full_name || activeChat.user?.username || `مستخدم`}
-              {activeChat.user?.is_verified && <BadgeCheck className="size-4 text-blue-500" />}
-            </span>
-            <span className="text-xs text-green-500">متصل الآن</span>
+            <div className="flex flex-col">
+              <span className="font-semibold text-sm flex items-center gap-1">
+                {activeChat.user?.full_name || activeChat.user?.username || `مستخدم`}
+                {activeChat.user?.is_verified && <BadgeCheck className="size-4 text-blue-500" />}
+              </span>
+              <span className="text-xs text-green-500">متصل الآن</span>
+            </div>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 [scrollbar-width:none]">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 [scrollbar-width:none] pb-32" onClick={() => setActiveLongPressId(null)}>
           {loadingMessages ? (
             <div className="flex justify-center py-4"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
           ) : messages.length > 0 ? (
             messages.map((msg) => {
               const isMe = msg.sender_id === currentUser?.uid
+              const isLongPressed = activeLongPressId === msg.id
+
               return (
-                <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[75%] rounded-2xl px-4 py-2 text-sm selectable-text ${isMe ? 'bg-foreground text-background rounded-tl-sm' : 'bg-secondary text-foreground rounded-tr-sm'}`}>
-                    {msg.content}
-                  </div>
-                </div>
+                <motion.div
+                  key={msg.id}
+                  initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                  className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} relative`}
+                >
+                  <motion.div
+                    drag="x"
+                    dragConstraints={{ left: 0, right: 0 }}
+                    dragElastic={0.15}
+                    onDragEnd={(e, info) => {
+                      // Swipe right to reply (RTL layout)
+                      if (info.offset.x > 50) {
+                        setReplyingTo(msg)
+                      }
+                    }}
+                    className="max-w-[75%] relative"
+                  >
+                    <div
+                      className={`rounded-2xl px-4 py-2 text-sm selectable-text cursor-pointer transition-transform ${isMe ? 'bg-foreground text-background rounded-tl-sm' : 'bg-secondary text-foreground rounded-tr-sm'}`}
+                      onContextMenu={(e) => {
+                        e.preventDefault()
+                        setActiveLongPressId(isLongPressed ? null : msg.id)
+                      }}
+                      onTouchStart={(e) => {
+                        const timer = setTimeout(() => {
+                           setActiveLongPressId(msg.id)
+                        }, 500)
+                        e.currentTarget.dataset.timer = timer.toString()
+                      }}
+                      onTouchEnd={(e) => {
+                        const timer = e.currentTarget.dataset.timer
+                        if (timer) clearTimeout(parseInt(timer))
+                      }}
+                      onTouchMove={(e) => {
+                        const timer = e.currentTarget.dataset.timer
+                        if (timer) clearTimeout(parseInt(timer))
+                      }}
+                    >
+                      {msg.content}
+                    </div>
+
+                    <AnimatePresence>
+                      {isLongPressed && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.8, y: isMe ? 10 : -10 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.8 }}
+                          className={`absolute z-20 flex gap-2 p-1.5 rounded-xl bg-background border border-border shadow-lg ${isMe ? '-top-12 right-0' : '-top-12 left-0'}`}
+                        >
+                           <button
+                             onClick={() => { setReplyingTo(msg); setActiveLongPressId(null); }}
+                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-secondary text-xs font-semibold transition-colors"
+                           >
+                              <Reply className="size-3.5" />
+                              رد
+                           </button>
+                           <div className="w-px bg-border my-1" />
+                           <button
+                             onClick={() => {
+                               navigator.clipboard.writeText(msg.content)
+                               setActiveLongPressId(null)
+                             }}
+                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-secondary text-xs font-semibold transition-colors"
+                           >
+                              <Copy className="size-3.5" />
+                              نسخ
+                           </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
+                </motion.div>
               )
             })
           ) : (
@@ -310,17 +385,41 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
           )}
         </div>
 
-        <form onSubmit={sendMessage} className="sticky bottom-0 bg-background p-3 border-t border-border flex gap-2">
+        <form onSubmit={sendMessage} className="absolute bottom-0 left-0 right-0 bg-background/80 backdrop-blur-md p-3 border-t border-border flex flex-col gap-2 safe-area-bottom">
+          <AnimatePresence>
+            {replyingTo && (
+              <motion.div
+                initial={{ opacity: 0, y: 10, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: 'auto' }}
+                exit={{ opacity: 0, y: 10, height: 0 }}
+                className="flex items-center justify-between bg-secondary/50 rounded-lg p-2.5 mx-1"
+              >
+                <div className="flex flex-col flex-1 overflow-hidden">
+                  <span className="text-xs font-bold text-foreground mb-0.5">الرد على رسالة</span>
+                  <span className="text-xs text-muted-foreground truncate">{replyingTo.content}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setReplyingTo(null)}
+                  className="p-1.5 hover:bg-background rounded-full transition-colors ml-1"
+                >
+                  <X className="size-4" />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <div className="flex gap-2 w-full">
           <input
             type="text"
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             placeholder="اكتب رسالة..."
-            className="flex-1 rounded-full border border-border bg-card px-4 py-2 text-sm outline-none focus:border-foreground"
+            className="flex-1 rounded-full border border-border bg-card px-4 py-3 text-sm outline-none focus:border-foreground transition-colors shadow-sm"
           />
-          <button type="submit" disabled={!newMessage.trim()} className="size-10 rounded-full bg-foreground flex items-center justify-center text-background disabled:opacity-50 shrink-0">
-            <Send className="size-4" />
+          <button type="submit" disabled={!newMessage.trim()} className="size-[44px] rounded-full bg-foreground flex items-center justify-center text-background disabled:opacity-50 shrink-0 shadow-sm transition-transform active:scale-95">
+            <Send className="size-5 -ml-1" />
           </button>
+          </div>
         </form>
       </div>
     )

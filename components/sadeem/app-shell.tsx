@@ -5,6 +5,9 @@ import { AnimatePresence, motion } from "framer-motion"
 import { Heart, Send, PlusSquare } from "lucide-react"
 import { onAuthStateChanged, User } from "firebase/auth"
 import { auth } from "@/lib/firebase"
+import { App } from '@capacitor/app'
+import { Capacitor } from '@capacitor/core'
+import { toast } from 'sonner'
 import { BottomNav } from "./bottom-nav"
 import { HomeFeed } from "./home-feed"
 import { ReelsView } from "./reels-view"
@@ -38,6 +41,8 @@ function AppShellContent() {
   const { selectedUserId, setSelectedUserId } = useNavigation()
   const isReels = active === "reels"
 
+  const [backPressCount, setBackPressCount] = useState(0)
+
   useEffect(() => {
     if (!auth) {
       setLoadingAuth(false)
@@ -49,6 +54,50 @@ function AppShellContent() {
     })
     return () => unsubscribe()
   }, [])
+
+  // Capacitor Hardware Back Button Handler (PopScope Equivalent)
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return
+
+    const handleBackButton = async () => {
+      // Priority 1: Close Modals/Overlays
+      if (selectedUserId) {
+        setSelectedUserId(null)
+        return
+      }
+
+      if (isSingleChatOpen) {
+        // Active chat view handles its own close state or we can reset to main chat tab
+        setIsSingleChatOpen(false)
+        setActive('chat')
+        return
+      }
+
+      // Priority 2: Not on Home tab? Go to Home tab
+      if (active !== 'home') {
+        setActive('home')
+        return
+      }
+
+      // Priority 3: On Home Tab, handle Double Tap to Exit
+      if (backPressCount === 0) {
+        setBackPressCount(1)
+        toast('اضغط مرة أخرى للخروج', {
+          duration: 2000,
+          position: 'bottom-center'
+        })
+        setTimeout(() => setBackPressCount(0), 2000)
+      } else if (backPressCount === 1) {
+        App.exitApp()
+      }
+    }
+
+    const backButtonListener = App.addListener('backButton', handleBackButton)
+
+    return () => {
+      backButtonListener.then(listener => listener.remove())
+    }
+  }, [active, selectedUserId, isSingleChatOpen, backPressCount, setSelectedUserId])
 
   return (
     <>

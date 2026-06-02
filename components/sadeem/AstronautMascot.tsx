@@ -41,7 +41,7 @@ export function AstronautMascot({ activeTab, tabsKeys, dark }: { activeTab: stri
       const navRect = navEl.getBoundingClientRect()
       return tabRect.left - navRect.left + (tabRect.width / 2)
     }
-    const w = typeof window !== 'undefined' ? window.innerWidth : 400
+    const w = navEl ? navEl.getBoundingClientRect().width : (typeof window !== 'undefined' ? window.innerWidth : 400)
     return (w / tabsKeys.length) * (index + 0.5)
   }
 
@@ -59,7 +59,8 @@ export function AstronautMascot({ activeTab, tabsKeys, dark }: { activeTab: stri
       const currentX = x.get()
       const targetX = getTabPosition(newIndex)
 
-      const w = typeof window !== 'undefined' ? window.innerWidth : 400
+      const navEl = document.getElementById('bottom-nav-container')
+      const w = navEl ? navEl.getBoundingClientRect().width : (typeof window !== 'undefined' ? window.innerWidth : 400)
       const tabWidth = w / tabsKeys.length
       const distanceInTabs = Math.abs(targetX - currentX) / tabWidth
 
@@ -120,7 +121,8 @@ export function AstronautMascot({ activeTab, tabsKeys, dark }: { activeTab: stri
         let currentDir = direction
 
         while (Date.now() - startTime < runDuration && stateRef.current === 'running' && isMountedRef.current) {
-           const w = window.innerWidth
+           const navEl = document.getElementById('bottom-nav-container')
+           const w = navEl ? navEl.getBoundingClientRect().width : (typeof window !== 'undefined' ? window.innerWidth : 400)
            const mascotWidth = 64
            const boundsLeft = 0
            const boundsRight = w - mascotWidth
