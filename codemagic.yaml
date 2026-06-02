@@ -1,0 +1,51 @@
+workflows:
+  android-release:
+    name: Sadeem Android Release
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+    environment:
+      node: 22.0.0
+      java: 21
+      groups:
+        # Codemagic variable groups. You can create groups like 'keystore_credentials' and 'supabase_credentials'
+        # with these keys in Codemagic's web UI.
+        - keystore_credentials
+        - nextjs_credentials
+      vars:
+        # Placeholders for Next.js and Firebase/Supabase env vars
+        # Make sure to set these securely in Codemagic environment variables UI
+        NEXT_PUBLIC_SUPABASE_URL: ""
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
+        NEXT_PUBLIC_FIREBASE_API_KEY: ""
+        NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ""
+        NEXT_PUBLIC_FIREBASE_PROJECT_ID: ""
+        NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ""
+        NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ""
+        NEXT_PUBLIC_FIREBASE_APP_ID: ""
+        NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: ""
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: 'zain'
+          include: true
+          source: true
+    scripts:
+      - name: Decode Android Keystore
+        script: |
+          echo "$KEYSTORE_FILE" | base64 --decode > android/app/sadeem-release-key.jks
+      - name: Install dependencies
+        script: |
+          npm install --force
+      - name: Build Next.js
+        script: |
+          npm run build
+      - name: Sync Capacitor
+        script: |
+          npx cap sync android
+      - name: Build Android Release APK
+        script: |
+          cd android
+          ./gradlew assembleRelease -PstorePassword=$KEYSTORE_PASSWORD -PkeyPassword=$KEYSTORE_PASSWORD -PkeyAlias=$KEY_ALIAS
+    artifacts:
+      - android/app/build/outputs/apk/release/**/*.apk
