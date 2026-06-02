@@ -299,7 +299,7 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
               const isMe = msg.sender_id === currentUser?.uid
               return (
                 <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[75%] rounded-2xl px-4 py-2 text-sm ${isMe ? 'bg-foreground text-background rounded-tl-sm' : 'bg-secondary text-foreground rounded-tr-sm'}`}>
+                  <div className={`max-w-[75%] rounded-2xl px-4 py-2 text-sm selectable-text ${isMe ? 'bg-foreground text-background rounded-tl-sm' : 'bg-secondary text-foreground rounded-tr-sm'}`}>
                     {msg.content}
                   </div>
                 </div>

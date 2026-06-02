@@ -336,7 +336,7 @@ function ReelItem({ reel, handleLike, index }: { reel: any, handleLike: (id: str
             {reel.users?.is_verified && <BadgeCheck className="size-4 text-blue-400 drop-shadow-sm" />}
           </p>
         </div>
-        <p className="text-sm leading-relaxed text-pretty text-white/90 drop-shadow-md">{reel.text || reel.caption || ""}</p>
+        <p className="text-sm leading-relaxed text-pretty text-white/90 drop-shadow-md selectable-text">{reel.text || reel.caption || ""}</p>
         <div className="mt-1 flex items-center gap-2 text-xs text-white/80 drop-shadow-md">
           <Music2 className="size-4" />
           <span className="truncate">الصوت الأصلي</span>

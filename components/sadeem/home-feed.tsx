@@ -331,7 +331,7 @@ export function HomeFeed() {
                 </button>
               </div>
 
-              {post.text && <p className="mt-3 text-sm leading-relaxed text-pretty">{post.text}</p>}
+              {post.text && <p className="mt-3 text-sm leading-relaxed text-pretty selectable-text">{post.text}</p>}
 
               {post.media_url ? (
                 <motion.div
