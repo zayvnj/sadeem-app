@@ -6,6 +6,8 @@ import { ChevronRight, Grid3x3, Film, Loader2, BadgeCheck } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
 import { auth } from "@/lib/firebase"
+import { useQueryClient } from "@tanstack/react-query"
+import { FollowButton } from "./follow-button"
 
 interface PublicProfileViewProps {
   userId: string
@@ -26,6 +28,7 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
   const [followingCount, setFollowingCount] = useState(0)
   const [activeTab, setActiveTab] = useState("grid")
   const currentUser = auth?.currentUser
+  const queryClient = useQueryClient()
 
   const fetchProfileData = async () => {
     try {
@@ -91,47 +94,6 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
   useEffect(() => {
     fetchProfileData()
   }, [userId])
-
-  const handleFollowToggle = async () => {
-    if (!currentUser) {
-      alert("يجب تسجيل الدخول")
-      return
-    }
-
-    const previousIsFollowing = isFollowing
-    const previousFollowersCount = followersCount
-
-    // Optimistic UI update
-    setIsFollowing(!previousIsFollowing)
-    setFollowersCount(c => previousIsFollowing ? Math.max(0, c - 1) : c + 1)
-
-    try {
-      if (previousIsFollowing) {
-        // Unfollow background request
-        const { error } = await supabase
-          .from("follows")
-          .delete()
-          .eq("follower_id", currentUser.uid)
-          .eq("following_id", userId)
-
-        if (error) throw error
-      } else {
-        // Follow background request
-        const { error } = await supabase
-          .from("follows")
-          .insert({ follower_id: currentUser.uid, following_id: userId })
-
-        if (error) throw error
-      }
-    } catch (error: any) {
-      console.error("Error toggling follow:", error)
-      toast.error(error.message || "حدث خطأ أثناء تغيير حالة المتابعة")
-
-      // Revert local state on error without triggering a full reload
-      setIsFollowing(previousIsFollowing)
-      setFollowersCount(previousFollowersCount)
-    }
-  }
 
   if (loading) {
     return (
@@ -224,16 +186,15 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
 
           {currentUser?.uid !== userId && (
             <div className="mt-6">
-              <button
-                onClick={handleFollowToggle}
-                className={`w-full py-2 px-4 rounded-xl font-bold text-sm transition-colors ${
-                  isFollowing
-                    ? "bg-secondary text-foreground hover:bg-secondary/80"
-                    : "bg-primary text-primary-foreground hover:bg-primary/90"
-                }`}
-              >
-                {isFollowing ? "إلغاء المتابعة" : "متابعة"}
-              </button>
+              <FollowButton
+                userId={userId}
+                initialIsFollowing={isFollowing}
+                className="w-full"
+                onToggleSuccess={(newIsFollowing) => {
+                  setIsFollowing(newIsFollowing)
+                  setFollowersCount(c => newIsFollowing ? c + 1 : Math.max(0, c - 1))
+                }}
+              />
             </div>
           )}
         </div>

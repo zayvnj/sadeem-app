@@ -46,12 +46,12 @@ export function CustomStoryGallery({ onClose, onSelect }: CustomStoryGalleryProp
       // NOTE: getMedias might fetch all. For pagination we might have to filter manually or slice.
       const result = await Media.getMedias({
         quantity: 100, // fetch latest 100
-        sort: [{ key: 'creationTime', ascending: false }]
+        sort: [{ key: 'creationDate', ascending: false }]
       })
 
-      const fetchedAssets: MediaAsset[] = result.medias.map((media) => ({
+      const fetchedAssets: MediaAsset[] = result.medias.map((media: any) => ({
         id: media.identifier,
-        uri: media.uri,
+        uri: media.uri || media.data || media.path,
         type: media.type === 'video' ? 'video' : 'image',
         duration: media.duration ? media.duration / 1000 : undefined,
         dataUrl: media.data
