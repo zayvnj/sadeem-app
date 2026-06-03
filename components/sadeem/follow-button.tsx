@@ -2,10 +2,10 @@
 
 import { useState } from "react"
 import { Loader2 } from "lucide-react"
-import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
 import { auth } from "@/lib/firebase"
-import { useQueryClient } from "@tanstack/react-query"
+import { useQueryClient, useMutation } from "@tanstack/react-query"
+import { toggleFollowAction } from "@/app/actions/follows"
 
 interface FollowButtonProps {
   userId: string
@@ -13,8 +13,6 @@ interface FollowButtonProps {
   onToggleSuccess?: (isFollowing: boolean) => void
   className?: string
 }
-
-import { useMutation } from "@tanstack/react-query"
 
 export function FollowButton({ userId, initialIsFollowing, onToggleSuccess, className = "" }: FollowButtonProps) {
   const [isFollowing, setIsFollowing] = useState(initialIsFollowing)
@@ -29,25 +27,14 @@ export function FollowButton({ userId, initialIsFollowing, onToggleSuccess, clas
 
       console.log("Follow Payload being sent:", { followerId: currentUser.uid, followingId: userId })
 
-      if (isFollowing) {
-        // Unfollow request
-        const { error } = await supabase
-          .from("follows")
-          .delete()
-          .eq("follower_id", currentUser.uid)
-          .eq("following_id", userId)
+      const token = await currentUser.getIdToken()
+      const result = await toggleFollowAction(token, userId, isFollowing)
 
-        if (error) throw error
-        return false
-      } else {
-        // Follow request
-        const { error } = await supabase
-          .from("follows")
-          .insert({ follower_id: currentUser.uid, following_id: userId })
-
-        if (error) throw error
-        return true
+      if (!result.success) {
+        throw new Error(result.error)
       }
+
+      return result.data as boolean
     },
     onSuccess: (newIsFollowing) => {
       setIsFollowing(newIsFollowing)
@@ -59,7 +46,7 @@ export function FollowButton({ userId, initialIsFollowing, onToggleSuccess, clas
       queryClient.invalidateQueries({ queryKey: ['userContext'] }) // To update feed follows
     },
     onError: (error: any) => {
-      console.error("SUPABASE FOLLOW ERROR:", error.message, error, error.details)
+      console.error("SERVER ACTION FOLLOW ERROR:", error.message, error)
       toast.error(error.message || "حدث خطأ أثناء تغيير حالة المتابعة")
     }
   })

@@ -11,6 +11,7 @@ import { StoryUpload } from "./story-upload"
 import { useStoryNavigation } from "./story/useStoryNavigation"
 import { useInfiniteQuery, useQuery, useQueryClient, useMutation } from "@tanstack/react-query"
 import { useInView } from "react-intersection-observer"
+import { getUserContextAction, getStoriesAction, getReelsAction, getPostsPageAction } from "@/app/actions/feed"
 
 const container = {
   hidden: { opacity: 0 },
@@ -42,14 +43,15 @@ export function HomeFeed() {
       const { data: userData } = await supabase.from('users').select('avatar_url').eq('id', user.uid).single()
       if (userData?.avatar_url) setCurrentUserAvatar(userData.avatar_url)
 
-      const { data: followsData, error: followsError } = await supabase.from('follows').select('following_id').eq('follower_id', user.uid)
+      const token = await user.getIdToken()
+      const result = await getUserContextAction(token)
 
-      if (followsError) {
-        console.error("Error fetching follows for user context:", followsError)
+      let followedIds = [user.uid]
+      if (result.success && result.data) {
+        followedIds = result.data.followedIds
+      } else {
+        console.error("Error fetching user context via server action:", result.error)
       }
-
-      const followedIds = followsData ? followsData.map(f => f.following_id) : []
-      followedIds.push(user.uid)
 
       console.log("User Context follow IDs:", followedIds)
 
@@ -66,24 +68,23 @@ export function HomeFeed() {
     queryKey: ['feed', 'stories'],
     enabled: !!userContext,
     queryFn: async () => {
-      const { user, followedIds } = userContext!
-      const oneDayAgo = new Date()
-      oneDayAgo.setDate(oneDayAgo.getDate() - 1)
-
-      const targetIds = followedIds
-
-      let storiesQuery = supabase
-        .from('stories')
-        .select('*, users:user_id(id, full_name, username, avatar_url, is_verified)')
-        .gt('created_at', oneDayAgo.toISOString())
-        .order('created_at', { ascending: true })
+      const { user } = userContext!
+      let storiesData: any[] = []
 
       if (user) {
-        storiesQuery = storiesQuery.in('user_id', targetIds)
+        const token = await user.getIdToken()
+        const result = await getStoriesAction(token)
+        if (result.success && result.data) {
+          storiesData = result.data
+        } else {
+          console.error('Stories fetch error:', result.error)
+        }
+      } else {
+        const result = await getStoriesAction()
+        if (result.success && result.data) {
+          storiesData = result.data
+        }
       }
-
-      const { data: storiesData, error } = await storiesQuery
-      if (error && error.code !== '42P01') console.error('Stories fetch error:', error)
 
       const groupedStories: Record<string, any[]> = {}
       ;(storiesData || []).forEach(story => {
@@ -105,56 +106,46 @@ export function HomeFeed() {
     queryKey: ['feed', 'reels'],
     enabled: !!userContext,
     queryFn: async () => {
-      const { user, followedIds } = userContext!
+      const { user } = userContext!
 
-      const targetIds = followedIds
-
-      let reelsQuery = supabase
-        .from('posts')
-        .select('*, users:user_id(id, full_name, username, avatar_url, is_verified)')
-        .eq('type', 'reel')
-        .order('created_at', { ascending: false })
-        .limit(15)
+      let reelsData: any[] = []
 
       if (user) {
-        reelsQuery = reelsQuery.in('user_id', targetIds)
+        const token = await user.getIdToken()
+        const result = await getReelsAction(token)
+        if (result.success && result.data) {
+          reelsData = result.data
+        } else {
+          console.error('Reels fetch error:', result.error)
+        }
+      } else {
+        const result = await getReelsAction()
+        if (result.success && result.data) {
+          reelsData = result.data
+        }
       }
 
-      const { data, error } = await reelsQuery
-      if (error && error.code !== '42P01') console.error('Reels fetch error:', error)
-      return data || []
+      return reelsData
     },
     staleTime: 60000,
   })
 
   // 4. Fetch Posts (Infinite Scroll)
   const fetchPostsPage = async ({ pageParam = 0 }) => {
-    const { user, followedIds } = userContext!
-    const limit = 10
+    const { user } = userContext!
 
-    const targetIds = followedIds
-
-    let postsQuery = supabase
-        .from('posts')
-        .select('*, users:user_id(id, full_name, username, avatar_url, is_verified), post_likes(user_id)')
-        .eq('type', 'post')
-        .order('created_at', { ascending: false })
-        .range(pageParam, pageParam + limit - 1)
-
+    let token: string | undefined = undefined
     if (user) {
-      postsQuery = postsQuery.in('user_id', targetIds)
+      token = await user.getIdToken()
     }
 
-    const { data, error } = await postsQuery
-    if (error && error.code !== '42P01') console.error('Posts fetch error:', error)
+    const result = await getPostsPageAction(token, pageParam)
+    if (!result.success) {
+      console.error('Posts fetch error:', result.error)
+      return { data: [], nextCursor: null }
+    }
 
-    const formattedPosts = (data || []).map((post: any) => {
-      const likesCount = post.post_likes ? post.post_likes.length : 0
-      const isLiked = user ? post.post_likes?.some((like: any) => like.user_id === user.uid) : false
-      return { ...post, likes_count: likesCount, isLiked }
-    })
-
-    return { data: formattedPosts, nextCursor: data?.length === limit ? pageParam + limit : null }
+    return { data: result.data, nextCursor: result.nextCursor }
   }
 
   const {
