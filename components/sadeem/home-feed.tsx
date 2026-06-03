@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Loader2, BadgeCheck, Play } from "lucide-react"
+import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Loader2, BadgeCheck, Play, Sparkles } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { auth } from "@/lib/firebase"
 import { useNavigation } from "./navigation-context"
@@ -42,9 +42,16 @@ export function HomeFeed() {
       const { data: userData } = await supabase.from('users').select('avatar_url').eq('id', user.uid).single()
       if (userData?.avatar_url) setCurrentUserAvatar(userData.avatar_url)
 
-      const { data: followsData } = await supabase.from('follows').select('following_id').eq('follower_id', user.uid)
+      const { data: followsData, error: followsError } = await supabase.from('follows').select('following_id').eq('follower_id', user.uid)
+
+      if (followsError) {
+        console.error("Error fetching follows for user context:", followsError)
+      }
+
       const followedIds = followsData ? followsData.map(f => f.following_id) : []
       followedIds.push(user.uid)
+
+      console.log("User Context follow IDs:", followedIds)
 
       const { data: viewedData } = await supabase.from('story_views').select('story_id').eq('user_id', user.uid)
       if (viewedData) setViewedStoryIds(new Set(viewedData.map(v => v.story_id)))
@@ -63,14 +70,16 @@ export function HomeFeed() {
       const oneDayAgo = new Date()
       oneDayAgo.setDate(oneDayAgo.getDate() - 1)
 
+      const targetIds = followedIds
+
       let storiesQuery = supabase
         .from('stories')
         .select('*, users:user_id(id, full_name, username, avatar_url, is_verified)')
         .gt('created_at', oneDayAgo.toISOString())
         .order('created_at', { ascending: true })
 
-      if (user && followedIds.length > 0) {
-        storiesQuery = storiesQuery.in('user_id', followedIds)
+      if (user) {
+        storiesQuery = storiesQuery.in('user_id', targetIds)
       }
 
       const { data: storiesData, error } = await storiesQuery
@@ -97,6 +106,9 @@ export function HomeFeed() {
     enabled: !!userContext,
     queryFn: async () => {
       const { user, followedIds } = userContext!
+
+      const targetIds = followedIds
+
       let reelsQuery = supabase
         .from('posts')
         .select('*, users:user_id(id, full_name, username, avatar_url, is_verified)')
@@ -104,8 +116,8 @@ export function HomeFeed() {
         .order('created_at', { ascending: false })
         .limit(15)
 
-      if (user && followedIds.length > 0) {
-        reelsQuery = reelsQuery.in('user_id', followedIds)
+      if (user) {
+        reelsQuery = reelsQuery.in('user_id', targetIds)
       }
 
       const { data, error } = await reelsQuery
@@ -120,6 +132,8 @@ export function HomeFeed() {
     const { user, followedIds } = userContext!
     const limit = 10
 
+    const targetIds = followedIds
+
     let postsQuery = supabase
         .from('posts')
         .select('*, users:user_id(id, full_name, username, avatar_url, is_verified), post_likes(user_id)')
@@ -127,8 +141,8 @@ export function HomeFeed() {
         .order('created_at', { ascending: false })
         .range(pageParam, pageParam + limit - 1)
 
-    if (user && followedIds.length > 0) {
-      postsQuery = postsQuery.in('user_id', followedIds)
+    if (user) {
+      postsQuery = postsQuery.in('user_id', targetIds)
     }
 
     const { data, error } = await postsQuery
@@ -578,9 +592,20 @@ export function HomeFeed() {
               </div>
             </motion.article>
           )}) : (
-            <div className="py-12 text-center text-muted-foreground">
-              لا توجد منشورات حتى الآن. كن أول من ينشر!
-            </div>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.5, type: 'spring', damping: 20 }}
+              className="py-24 flex flex-col items-center justify-center text-center px-6"
+            >
+              <div className="size-20 rounded-full bg-secondary flex items-center justify-center mb-6">
+                <Sparkles className="size-10 text-primary animate-pulse" />
+              </div>
+              <h3 className="text-xl font-bold mb-2 text-foreground">لا توجد منشورات.</h3>
+              <p className="text-muted-foreground max-w-sm">
+                ابدأ بمتابعة الأشخاص أو انشر شيئاً جديداً!
+              </p>
+            </motion.div>
           )}
 
           {/* Infinite Scroll trigger area */}

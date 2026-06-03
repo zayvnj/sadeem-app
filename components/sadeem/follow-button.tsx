@@ -14,21 +14,21 @@ interface FollowButtonProps {
   className?: string
 }
 
+import { useMutation } from "@tanstack/react-query"
+
 export function FollowButton({ userId, initialIsFollowing, onToggleSuccess, className = "" }: FollowButtonProps) {
   const [isFollowing, setIsFollowing] = useState(initialIsFollowing)
-  const [isFollowLoading, setIsFollowLoading] = useState(false)
   const queryClient = useQueryClient()
   const currentUser = auth?.currentUser
 
-  const handleFollowToggle = async () => {
-    if (!currentUser) {
-      alert("يجب تسجيل الدخول")
-      return
-    }
+  const followMutation = useMutation({
+    mutationFn: async () => {
+      if (!currentUser) {
+        throw new Error("يجب تسجيل الدخول")
+      }
 
-    setIsFollowLoading(true)
+      console.log("Follow Payload being sent:", { followerId: currentUser.uid, followingId: userId })
 
-    try {
       if (isFollowing) {
         // Unfollow request
         const { error } = await supabase
@@ -38,9 +38,7 @@ export function FollowButton({ userId, initialIsFollowing, onToggleSuccess, clas
           .eq("following_id", userId)
 
         if (error) throw error
-
-        setIsFollowing(false)
-        onToggleSuccess?.(false)
+        return false
       } else {
         // Follow request
         const { error } = await supabase
@@ -48,23 +46,33 @@ export function FollowButton({ userId, initialIsFollowing, onToggleSuccess, clas
           .insert({ follower_id: currentUser.uid, following_id: userId })
 
         if (error) throw error
-
-        setIsFollowing(true)
-        onToggleSuccess?.(true)
+        return true
       }
+    },
+    onSuccess: (newIsFollowing) => {
+      setIsFollowing(newIsFollowing)
+      onToggleSuccess?.(newIsFollowing)
 
       // Strict invalidation per requirements
       queryClient.invalidateQueries({ queryKey: ['profile', userId] })
       queryClient.invalidateQueries({ queryKey: ['feed'] })
       queryClient.invalidateQueries({ queryKey: ['userContext'] }) // To update feed follows
-
-    } catch (error: any) {
-      console.error("Error toggling follow:", error)
+    },
+    onError: (error: any) => {
+      console.error("SUPABASE FOLLOW ERROR:", error.message, error, error.details)
       toast.error(error.message || "حدث خطأ أثناء تغيير حالة المتابعة")
-    } finally {
-      setIsFollowLoading(false)
     }
+  })
+
+  const handleFollowToggle = () => {
+    if (!currentUser) {
+      alert("يجب تسجيل الدخول")
+      return
+    }
+    followMutation.mutate()
   }
+
+  const isFollowLoading = followMutation.isPending
 
   return (
     <button
