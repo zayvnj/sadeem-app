@@ -20,6 +20,63 @@ interface ChatViewProps {
   onChatOpenStateChange?: (isOpen: boolean) => void;
 }
 
+const ReplyQuote = ({ replyId, replyName, replyText, isMe }: { replyId?: string, replyName: string, replyText: string, isMe: boolean }) => {
+  return (
+    <div
+      onClick={(e) => {
+        e.stopPropagation();
+        if (replyId) {
+          const target = document.getElementById(`msg-${replyId}`);
+          if (target) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            target.animate([
+              { backgroundColor: 'rgba(59, 130, 246, 0.3)' },
+              { backgroundColor: 'transparent' }
+            ], { duration: 1500 });
+          }
+        }
+      }}
+      className={`flex flex-col border-r-4 bg-background/10 rounded-l-md px-2 py-1 -mx-2 -mt-1 mb-1 cursor-pointer hover:bg-background/20 transition-colors ${isMe ? 'border-background/50' : 'border-primary'}`}
+    >
+      <span className={`text-xs font-bold truncate ${isMe ? 'text-background/90' : 'text-primary'}`}>{replyName}</span>
+      <span className="text-xs truncate opacity-80">{replyText}</span>
+    </div>
+  );
+};
+
+// Helper to parse reply messages
+const parseReply = (content: string) => {
+  const replyMatch = content.match(/^\[REPLY\|(.*?)\|(.*?)\|(.*?)\]\s*([\s\S]*)$/);
+  if (replyMatch) {
+    let [_, replyId, replyName, replyText, actualMessage] = replyMatch;
+    if (!replyText || replyText.trim() === '') {
+      replyText = 'مرفق أو رسالة محذوفة'; // Fallback for empty quoted text
+    }
+    return {
+      isReply: true,
+      replyId,
+      replyName,
+      replyText,
+      actualMessage
+    };
+  }
+
+  // Legacy format support
+  const legacyMatch = content.match(/^\[رد على: (.*?)\]\s*([\s\S]*)$/);
+  if (legacyMatch) {
+    let [_, replyText, actualMessage] = legacyMatch;
+    return {
+      isReply: true,
+      replyId: '',
+      replyName: 'مستخدم',
+      replyText,
+      actualMessage
+    };
+  }
+
+  return { isReply: false, actualMessage: content };
+};
+
 export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
   const [chats, setChats] = useState<any[]>([])
   const [activeChat, setActiveChat] = useState<any | null>(null)
@@ -353,47 +410,24 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
                     >
                       {/* Reply Parser */}
                       {(() => {
-                        const replyMatch = msg.content.match(/^\[REPLY\|(.*?)\|(.*?)\|(.*?)\]\s*([\s\S]*)$/);
-                        if (replyMatch) {
-                           const [_, replyId, replyName, replyText, actualMessage] = replyMatch;
-                           return (
-                             <div className="flex flex-col gap-1">
-                               <div
-                                 onClick={(e) => {
-                                    e.stopPropagation();
-                                    const target = document.getElementById(`msg-${replyId}`);
-                                    if (target) {
-                                      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                      target.animate([
-                                        { backgroundColor: 'rgba(59, 130, 246, 0.3)' },
-                                        { backgroundColor: 'transparent' }
-                                      ], { duration: 1500 });
-                                    }
-                                 }}
-                                 className={`flex flex-col border-l-2 border-primary bg-background/10 rounded-r-md px-2 py-1 -mx-2 -mt-1 cursor-pointer hover:bg-background/20 transition-colors ${isMe ? 'border-primary' : 'border-primary'}`}
-                               >
-                                 <span className="text-xs font-bold text-primary truncate">{replyName}</span>
-                                 <span className="text-xs truncate opacity-80">{replyText}</span>
-                               </div>
-                               <span>{actualMessage}</span>
-                             </div>
-                           )
-                        } else if (msg.content.startsWith('[رد على: ')) {
-                           // Legacy format parsing
-                           const legacyMatch = msg.content.match(/^\[رد على: (.*?)\]\s*([\s\S]*)$/);
-                           if (legacyMatch) {
-                              return (
-                                <div className="flex flex-col gap-1">
-                                 <div className={`flex flex-col border-l-2 border-primary bg-background/10 rounded-r-md px-2 py-1 -mx-2 -mt-1`}>
-                                   <span className="text-xs font-bold text-primary truncate">مستخدم</span>
-                                   <span className="text-xs truncate opacity-80">{legacyMatch[1]}</span>
-                                 </div>
-                                 <span>{legacyMatch[2]}</span>
-                               </div>
-                              )
-                           }
+                        const { isReply, replyId, replyName, replyText, actualMessage } = parseReply(msg.content);
+                        if (isReply) {
+                          return (
+                            <div className="flex flex-col gap-1">
+                              <ReplyQuote
+                                replyId={replyId}
+                                replyName={replyName as string}
+                                replyText={replyText as string}
+                                isMe={isMe}
+                              />
+                              {actualMessage && actualMessage.trim() !== '' ? (
+                                <span>{actualMessage}</span>
+                              ) : (
+                                <span className="italic opacity-80 text-xs">محتوى غير نصي</span>
+                              )}
+                            </div>
+                          );
                         }
-
                         return msg.content;
                       })()}
                     </div>
