@@ -44,6 +44,19 @@ const ReplyQuote = ({ replyId, replyName, replyText, isMe }: { replyId?: string,
   );
 };
 
+// Helper to extract clean message content for previews
+const cleanMessagePreview = (content: string) => {
+  const replyMatch = content.match(/^\[REPLY\|.*?\|.*?\|.*?\]\s*([\s\S]*)$/);
+  if (replyMatch) {
+    return replyMatch[1];
+  }
+  const legacyMatch = content.match(/^\[رد على: .*?\]\s*([\s\S]*)$/);
+  if (legacyMatch) {
+    return legacyMatch[1];
+  }
+  return content;
+};
+
 // Helper to parse reply messages
 const parseReply = (content: string) => {
   const replyMatch = content.match(/^\[REPLY\|(.*?)\|(.*?)\|(.*?)\]\s*([\s\S]*)$/);
@@ -148,7 +161,7 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
         return {
           id: chat.id,
           user: userData || { id: otherParticipantId, full_name: 'مستخدم غير معروف' },
-          lastMessage: msgData?.content || 'لا توجد رسائل',
+          lastMessage: msgData ? cleanMessagePreview(msgData.content) : 'لا توجد رسائل',
           lastMessageTime: msgData?.created_at,
           unread: 0 // Mock for now
         }
