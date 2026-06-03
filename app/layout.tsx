@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Cairo } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
+import { QueryProvider } from '@/lib/query-provider'
 
 const cairo = Cairo({ subsets: ['arabic', 'latin'], variable: '--font-cairo' })
 
@@ -36,7 +37,9 @@ export default function RootLayout({
   return (
     <html lang="ar" dir="rtl" className={`bg-background ${cairo.variable}`}>
       <body className="font-sans antialiased">
-        {children}
+        <QueryProvider>
+          {children}
+        </QueryProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
