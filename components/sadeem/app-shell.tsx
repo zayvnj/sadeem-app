@@ -188,7 +188,7 @@ function AppShellContent() {
 
           {/* Bottom navigation */}
           {!isSingleChatOpen && !selectedUserId && (
-            <div className="shrink-0 overflow-visible">
+            <div className="shrink-0 overflow-visible relative z-50">
               <BottomNav active={active} onChange={setActive} dark={isReels} />
             </div>
           )}
