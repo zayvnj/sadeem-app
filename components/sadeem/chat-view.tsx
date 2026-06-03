@@ -1,11 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence, useAnimation } from "framer-motion"
 import { Sparkles, Search, Send, ArrowRight, Loader2, BadgeCheck, Reply, Copy, X } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { auth } from "@/lib/firebase"
 import { useNavigation } from "./navigation-context"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useRouter, useSearchParams } from "next/navigation"
 
 const container = {
   hidden: { opacity: 0 },
@@ -91,65 +93,43 @@ const parseReply = (content: string) => {
 };
 
 export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
-  const [chats, setChats] = useState<any[]>([])
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const queryClient = useQueryClient()
+  const currentUser = auth?.currentUser
+
   const [activeChat, setActiveChat] = useState<any | null>(null)
-  const [messages, setMessages] = useState<any[]>([])
   const { setSelectedUserId } = useNavigation()
   const [newMessage, setNewMessage] = useState("")
-  const [loadingChats, setLoadingChats] = useState(true)
-  const [loadingMessages, setLoadingMessages] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<any[]>([])
-  const currentUser = auth?.currentUser
   const [replyingTo, setReplyingTo] = useState<any | null>(null)
   const [activeLongPressId, setActiveLongPressId] = useState<string | null>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    fetchChats()
+  // 1. Fetch Chats with React Query
+  const { data: chats = [], isLoading: loadingChats } = useQuery({
+    queryKey: ['chats', currentUser?.uid],
+    queryFn: async () => {
+      if (!currentUser) return []
 
-    // Realtime subscription for global chats update
-    const channel = supabase
-      .channel('public:messages')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
-        // Refresh chats if a new message arrives and we are not in an active chat
-        if (!activeChat) {
-          fetchChats()
-        }
-      })
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [activeChat])
-
-  const fetchChats = async () => {
-    if (!currentUser) return
-    setLoadingChats(true)
-    try {
-      // Step 1: Fetch chats where current user is a participant
       const { data: chatsData, error: chatsError } = await supabase
         .from('chats')
         .select('*')
         .contains('participant_ids', [currentUser.uid])
 
       if (chatsError && chatsError.code !== '42P01') console.error(chatsError)
-
       const activeChats = chatsData || []
 
-      // Step 2: For each chat, fetch the other participant's details and the latest message
       const enrichedChats = await Promise.all(activeChats.map(async (chat) => {
-        // Find the other participant ID
         const otherParticipantId = chat.participant_ids.find((id: string) => id !== currentUser.uid) || chat.participant_ids[0]
 
-        // Fetch user details
         const { data: userData } = await supabase
           .from('users')
           .select('id, full_name, username, avatar_url, is_verified')
           .eq('id', otherParticipantId)
           .single()
 
-        // Fetch latest message
         const { data: msgData } = await supabase
           .from('messages')
           .select('content, created_at')
@@ -160,28 +140,59 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
 
         return {
           id: chat.id,
-          user: userData || { id: otherParticipantId, full_name: 'مستخدم غير معروف' },
+          user: userData || { id: otherParticipantId, full_name: 'مستخدم غير معروف', username: '', avatar_url: '', is_verified: false },
           lastMessage: msgData ? cleanMessagePreview(msgData.content) : 'لا توجد رسائل',
           lastMessageTime: msgData?.created_at,
-          unread: 0 // Mock for now
+          unread: 0
         }
       }))
 
-      // Sort by latest message time
       enrichedChats.sort((a, b) => {
         if (!a.lastMessageTime) return 1;
         if (!b.lastMessageTime) return -1;
         return new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime();
       });
 
-      setChats(enrichedChats)
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoadingChats(false)
-    }
-  }
+      return enrichedChats
+    },
+    enabled: !!currentUser,
+  })
 
+  // 2. Fetch Messages with React Query
+  const { data: messages = [], isLoading: loadingMessages } = useQuery({
+    queryKey: ['messages', activeChat?.id],
+    queryFn: async () => {
+      if (!activeChat?.id) return []
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('chat_id', activeChat.id)
+        .order('created_at', { ascending: true })
+
+      if (error && error.code !== '42P01') console.error(error)
+      return data || []
+    },
+    enabled: !!activeChat?.id,
+  })
+
+  // Listen to Global Messages for Chat List Updates
+  useEffect(() => {
+    if (!currentUser) return;
+    const channel = supabase
+      .channel('public:messages')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => {
+        if (!activeChat) {
+          queryClient.invalidateQueries({ queryKey: ['chats', currentUser.uid] })
+        }
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [activeChat, currentUser, queryClient])
+
+  // Sync Search Query
   useEffect(() => {
     const searchUsers = async () => {
       if (!searchQuery.trim()) {
@@ -251,25 +262,26 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
   const openChat = async (chatId: string, chatUser: any) => {
     setActiveChat({ id: chatId, user: chatUser })
     if (onChatOpenStateChange) onChatOpenStateChange(true)
-    setLoadingMessages(true)
-
-    // Fetch messages for this chat_id
-    try {
-      const { data, error } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('chat_id', chatId)
-        .order('created_at', { ascending: true })
-
-      if (error && error.code !== '42P01') console.error(error)
-      setMessages(data || [])
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoadingMessages(false)
-    }
-
+    router.push(`?chatId=${chatId}`)
   }
+
+  useEffect(() => {
+    const chatIdParam = searchParams.get('chatId')
+    if (!chatIdParam && activeChat) {
+      setActiveChat(null)
+      if (onChatOpenStateChange) onChatOpenStateChange(false)
+    }
+  }, [searchParams, activeChat, onChatOpenStateChange])
+
+  const closeChat = () => {
+    router.back() // This handles URL state natively
+  }
+
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: messages.length > 0 ? 'smooth' : 'auto' })
+    }
+  }, [messages])
 
   useEffect(() => {
     if (!activeChat?.id) return;
@@ -285,7 +297,9 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
       }, (payload) => {
         // Only add if we didn't just send it (to avoid double adding optimistic UI messages)
         if (payload.new.sender_id !== currentUser?.uid) {
-           setMessages((prev) => [...prev, payload.new])
+           queryClient.setQueryData(['messages', activeChat.id], (old: any) => {
+             return [...(old || []), payload.new]
+           })
         }
       })
       .subscribe()
@@ -333,7 +347,9 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
         return
       }
 
-      setMessages((prev) => [...prev, tempMessage])
+      queryClient.setQueryData(['messages', activeChat.id], (old: any) => {
+        return [...(old || []), tempMessage]
+      })
       setNewMessage("")
       setReplyingTo(null)
     } catch (error) {
@@ -346,7 +362,7 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
     return (
       <div className="flex flex-col bg-background fixed inset-0 z-[100] safe-area-top">
         <div className="flex items-center gap-3 px-4 py-3 border-b border-border sticky top-0 bg-background z-10 shadow-sm">
-          <button onClick={() => { setActiveChat(null); if (onChatOpenStateChange) onChatOpenStateChange(false); }} className="p-2 -mr-2 rounded-full hover:bg-secondary transition-colors">
+          <button onClick={closeChat} className="p-2 -mr-2 rounded-full hover:bg-secondary transition-colors">
             <ArrowRight className="size-5" />
           </button>
 
@@ -481,6 +497,7 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
           ) : (
             <div className="text-center text-sm text-muted-foreground pt-10">ابدأ المحادثة الآن</div>
           )}
+          <div ref={messagesEndRef} />
         </div>
 
         <form onSubmit={sendMessage} className="absolute bottom-0 left-0 right-0 bg-background/80 backdrop-blur-md p-3 border-t border-border flex flex-col gap-2 safe-area-bottom">
