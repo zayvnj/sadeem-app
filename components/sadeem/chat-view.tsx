@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect, useRef, useCallback } from "react"
 import { motion, AnimatePresence, useAnimation } from "framer-motion"
 import { Sparkles, Search, Send, ArrowRight, Loader2, BadgeCheck, Reply, Copy, X } from "lucide-react"
 import { supabase } from "@/lib/supabase"
@@ -92,11 +92,179 @@ const parseReply = (content: string) => {
   return { isReply: false, actualMessage: content };
 };
 
+
+const MessageBubble = React.memo(({
+  msg,
+  isMe,
+  isLongPressed,
+  setActiveLongPressId,
+  setReplyingTo,
+  currentUser
+}: {
+  msg: any,
+  isMe: boolean,
+  isLongPressed: boolean,
+  setActiveLongPressId: (id: string | null) => void,
+  setReplyingTo: (msg: any) => void,
+  currentUser: any
+}) => {
+  return (
+    <motion.div
+      key={msg.id}
+      id={`msg-${msg.id}`}
+      initial={{ opacity: 0, scale: 0.9, y: 10 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      transition={{ type: "spring", stiffness: 400, damping: 25 }}
+      className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} relative`}
+    >
+      <motion.div
+        drag="x"
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={0.15}
+        onDragEnd={(e, info) => {
+          if (info.offset.x > 50) {
+            setReplyingTo(msg)
+          }
+        }}
+        className="max-w-[75%] relative"
+      >
+        <div
+          className={`rounded-2xl px-4 py-2 text-sm selectable-text cursor-pointer transition-transform ${isMe ? 'bg-foreground text-background rounded-tl-sm' : 'bg-secondary text-foreground rounded-tr-sm'}`}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            setActiveLongPressId(isLongPressed ? null : msg.id)
+          }}
+          onTouchStart={(e) => {
+            const timer = setTimeout(() => {
+               setActiveLongPressId(msg.id)
+            }, 500)
+            e.currentTarget.dataset.timer = timer.toString()
+          }}
+          onTouchEnd={(e) => {
+            const timer = e.currentTarget.dataset.timer
+            if (timer) clearTimeout(parseInt(timer))
+          }}
+          onTouchMove={(e) => {
+            const timer = e.currentTarget.dataset.timer
+            if (timer) clearTimeout(parseInt(timer))
+          }}
+        >
+          {(() => {
+            const { isReply, replyId, replyName, replyText, actualMessage } = parseReply(msg.content);
+            if (isReply) {
+              return (
+                <div className="flex flex-col">
+                  <ReplyQuote
+                    replyId={replyId}
+                    replyName={replyName as string}
+                    replyText={replyText as string}
+                    isMe={isMe}
+                  />
+                  {actualMessage && actualMessage.trim() !== '' ? (
+                    <span>{actualMessage}</span>
+                  ) : (
+                    <span className="italic opacity-80 text-xs">محتوى غير نصي</span>
+                  )}
+                </div>
+              );
+            }
+            return msg.content;
+          })()}
+        </div>
+
+        <AnimatePresence>
+          {isLongPressed && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8, y: isMe ? 10 : -10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              className={`absolute z-20 flex gap-2 p-1.5 rounded-xl bg-background border border-border shadow-lg ${isMe ? '-top-12 right-0' : '-top-12 left-0'}`}
+            >
+               <button
+                 onClick={() => { setReplyingTo(msg); setActiveLongPressId(null); }}
+                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-secondary text-xs font-semibold transition-colors"
+               >
+                  <Reply className="size-3.5" />
+                  رد
+               </button>
+               <div className="w-px bg-border my-1" />
+               <button
+                 onClick={() => {
+                   navigator.clipboard.writeText(msg.content)
+                   setActiveLongPressId(null)
+                 }}
+                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-secondary text-xs font-semibold transition-colors"
+               >
+                  <Copy className="size-3.5" />
+                  نسخ
+               </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    </motion.div>
+  )
+})
+
+const ConversationItem = React.memo(({
+  chat,
+  openChat,
+  setSelectedUserId
+}: {
+  chat: any,
+  openChat: (id: string, user: any) => void,
+  setSelectedUserId: (id: string | null) => void
+}) => {
+  const name = chat.user.full_name || chat.user.username || `مستخدم`
+  const timeString = chat.lastMessageTime
+    ? new Date(chat.lastMessageTime).toLocaleTimeString('ar-SA', { hour: 'numeric', minute: 'numeric' })
+    : "الآن"
+
+  return (
+    <motion.li variants={item}>
+      <button onClick={() => openChat(chat.id, chat.user)} className="flex w-full items-center gap-3 px-4 py-3 text-right transition-colors hover:bg-secondary">
+        <div
+          onClick={(e) => { e.stopPropagation(); chat.user?.id && setSelectedUserId(chat.user.id); }}
+        >
+          {chat.user.avatar_url ? (
+            <img src={chat.user.avatar_url} alt="" className="size-12 rounded-full object-cover" />
+          ) : (
+            <span className="flex size-12 items-center justify-center rounded-full bg-muted font-semibold text-muted-foreground">
+              {name.charAt(0)}
+            </span>
+          )}
+        </div>
+        <span className="flex-1">
+          <span className="flex items-center justify-between">
+            <span
+              className="text-sm font-semibold flex items-center gap-1 hover:underline"
+              onClick={(e) => { e.stopPropagation(); chat.user?.id && setSelectedUserId(chat.user.id); }}
+            >
+              {name}
+              {chat.user.is_verified && <BadgeCheck className="size-4 text-blue-500" />}
+            </span>
+            <span className="text-xs text-muted-foreground">{timeString}</span>
+          </span>
+          <span className="mt-0.5 flex items-center justify-between gap-2">
+            <span className="block text-xs text-muted-foreground truncate">{chat.lastMessage}</span>
+            {chat.unread > 0 && (
+              <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-foreground text-[10px] font-bold text-background">
+                {chat.unread}
+              </span>
+            )}
+          </span>
+        </span>
+      </button>
+    </motion.li>
+  )
+})
+
 export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const queryClient = useQueryClient()
   const currentUser = auth?.currentUser
+  const isOpeningRef = useRef(false)
 
   const [activeChat, setActiveChat] = useState<any | null>(null)
   const { setSelectedUserId } = useNavigation()
@@ -156,6 +324,7 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
       return enrichedChats
     },
     enabled: !!currentUser,
+    staleTime: 60000,
   })
 
   // 2. Fetch Messages with React Query
@@ -173,6 +342,7 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
       return data || []
     },
     enabled: !!activeChat?.id,
+    staleTime: 60000,
   })
 
   // Listen to Global Messages for Chat List Updates
@@ -259,14 +429,25 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
     openChat(chatId, selectedUser)
   }
 
-  const openChat = async (chatId: string, chatUser: any) => {
+  const openChat = useCallback(async (chatId: string, chatUser: any) => {
+    isOpeningRef.current = true
     setActiveChat({ id: chatId, user: chatUser })
     if (onChatOpenStateChange) onChatOpenStateChange(true)
     router.push(`?chatId=${chatId}`)
-  }
+  }, [onChatOpenStateChange, router])
 
   useEffect(() => {
     const chatIdParam = searchParams.get('chatId')
+
+    // If we just clicked openChat, ignore the first param check while URL is transitioning
+    if (isOpeningRef.current) {
+      if (chatIdParam) {
+        // Once URL finally updates to match, we can release the lock
+        isOpeningRef.current = false
+      }
+      return
+    }
+
     if (!chatIdParam && activeChat) {
       setActiveChat(null)
       if (onChatOpenStateChange) onChatOpenStateChange(false)
@@ -358,194 +539,109 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
     }
   }
 
-  if (activeChat) {
-    return (
-      <div className="flex flex-col bg-background fixed inset-0 z-[100] safe-area-top">
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-border sticky top-0 bg-background z-10 shadow-sm">
-          <button onClick={closeChat} className="p-2 -mr-2 rounded-full hover:bg-secondary transition-colors">
-            <ArrowRight className="size-5" />
-          </button>
-
-          <div
-            className="flex items-center gap-3 flex-1 cursor-pointer hover:bg-secondary/50 rounded-lg p-1 -ml-1 transition-colors"
-            onClick={() => activeChat.user?.id && setSelectedUserId(activeChat.user.id)}
-          >
-            {activeChat.user?.avatar_url ? (
-              <img src={activeChat.user.avatar_url} alt="" className="size-10 rounded-full object-cover" />
-            ) : (
-              <div className="size-10 rounded-full bg-muted flex items-center justify-center font-bold text-muted-foreground">
-                {(activeChat.user?.full_name || activeChat.user?.username || "م").charAt(0)}
-              </div>
-            )}
-            <div className="flex flex-col">
-              <span className="font-semibold text-sm flex items-center gap-1">
-                {activeChat.user?.full_name || activeChat.user?.username || `مستخدم`}
-                {activeChat.user?.is_verified && <BadgeCheck className="size-4 text-blue-500" />}
-              </span>
-              <span className="text-xs text-green-500">متصل الآن</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 [scrollbar-width:none] pb-32" onClick={() => setActiveLongPressId(null)}>
-          {loadingMessages ? (
-            <div className="flex justify-center py-4"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
-          ) : messages.length > 0 ? (
-            messages.map((msg) => {
-              const isMe = msg.sender_id === currentUser?.uid
-              const isLongPressed = activeLongPressId === msg.id
-
-              return (
-                <motion.div
-                  key={msg.id}
-                  id={`msg-${msg.id}`}
-                  initial={{ opacity: 0, scale: 0.9, y: 10 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                  className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} relative`}
-                >
-                  <motion.div
-                    drag="x"
-                    dragConstraints={{ left: 0, right: 0 }}
-                    dragElastic={0.15}
-                    onDragEnd={(e, info) => {
-                      // Swipe right to reply (RTL layout)
-                      if (info.offset.x > 50) {
-                        setReplyingTo(msg)
-                      }
-                    }}
-                    className="max-w-[75%] relative"
-                  >
-                    <div
-                      className={`rounded-2xl px-4 py-2 text-sm selectable-text cursor-pointer transition-transform ${isMe ? 'bg-foreground text-background rounded-tl-sm' : 'bg-secondary text-foreground rounded-tr-sm'}`}
-                      onContextMenu={(e) => {
-                        e.preventDefault()
-                        setActiveLongPressId(isLongPressed ? null : msg.id)
-                      }}
-                      onTouchStart={(e) => {
-                        const timer = setTimeout(() => {
-                           setActiveLongPressId(msg.id)
-                        }, 500)
-                        e.currentTarget.dataset.timer = timer.toString()
-                      }}
-                      onTouchEnd={(e) => {
-                        const timer = e.currentTarget.dataset.timer
-                        if (timer) clearTimeout(parseInt(timer))
-                      }}
-                      onTouchMove={(e) => {
-                        const timer = e.currentTarget.dataset.timer
-                        if (timer) clearTimeout(parseInt(timer))
-                      }}
-                    >
-                      {/* Reply Parser */}
-                      {(() => {
-                        const { isReply, replyId, replyName, replyText, actualMessage } = parseReply(msg.content);
-                        if (isReply) {
-                          return (
-                            <div className="flex flex-col gap-1">
-                              <ReplyQuote
-                                replyId={replyId}
-                                replyName={replyName as string}
-                                replyText={replyText as string}
-                                isMe={isMe}
-                              />
-                              {actualMessage && actualMessage.trim() !== '' ? (
-                                <span>{actualMessage}</span>
-                              ) : (
-                                <span className="italic opacity-80 text-xs">محتوى غير نصي</span>
-                              )}
-                            </div>
-                          );
-                        }
-                        return msg.content;
-                      })()}
-                    </div>
-
-                    <AnimatePresence>
-                      {isLongPressed && (
-                        <motion.div
-                          initial={{ opacity: 0, scale: 0.8, y: isMe ? 10 : -10 }}
-                          animate={{ opacity: 1, scale: 1, y: 0 }}
-                          exit={{ opacity: 0, scale: 0.8 }}
-                          className={`absolute z-20 flex gap-2 p-1.5 rounded-xl bg-background border border-border shadow-lg ${isMe ? '-top-12 right-0' : '-top-12 left-0'}`}
-                        >
-                           <button
-                             onClick={() => { setReplyingTo(msg); setActiveLongPressId(null); }}
-                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-secondary text-xs font-semibold transition-colors"
-                           >
-                              <Reply className="size-3.5" />
-                              رد
-                           </button>
-                           <div className="w-px bg-border my-1" />
-                           <button
-                             onClick={() => {
-                               navigator.clipboard.writeText(msg.content)
-                               setActiveLongPressId(null)
-                             }}
-                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-secondary text-xs font-semibold transition-colors"
-                           >
-                              <Copy className="size-3.5" />
-                              نسخ
-                           </button>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </motion.div>
-                </motion.div>
-              )
-            })
-          ) : (
-            <div className="text-center text-sm text-muted-foreground pt-10">ابدأ المحادثة الآن</div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-
-        <form onSubmit={sendMessage} className="absolute bottom-0 left-0 right-0 bg-background/80 backdrop-blur-md p-3 border-t border-border flex flex-col gap-2 safe-area-bottom">
-          <AnimatePresence>
-            {replyingTo && (
-              <motion.div
-                initial={{ opacity: 0, y: 10, height: 0 }}
-                animate={{ opacity: 1, y: 0, height: 'auto' }}
-                exit={{ opacity: 0, y: 10, height: 0 }}
-                className="flex items-center justify-between bg-primary/10 border-l-4 border-primary rounded-r-lg p-2.5 mx-1"
-              >
-                <div className="flex flex-col flex-1 overflow-hidden">
-                  <span className="text-xs font-bold text-primary mb-0.5">
-                    الرد على {replyingTo.sender_id === currentUser?.uid ? 'أنت' : (activeChat.user?.full_name || activeChat.user?.username || 'مستخدم')}
-                  </span>
-                  <span className="text-xs text-foreground/80 truncate">
-                    {replyingTo.content.replace(/\[REPLY\|.*?\]\s*/, '').replace(/^\[رد على: (.*?)\]\s*/, '')}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setReplyingTo(null)}
-                  className="p-1.5 hover:bg-background/50 rounded-full transition-colors ml-1"
-                >
-                  <X className="size-4" />
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          <div className="flex gap-2 w-full">
-          <input
-            type="text"
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            placeholder="اكتب رسالة..."
-            className="flex-1 rounded-full border border-border bg-card px-4 py-3 text-sm outline-none focus:border-foreground transition-colors shadow-sm"
-          />
-          <button type="submit" disabled={!newMessage.trim()} className="size-[44px] rounded-full bg-foreground flex items-center justify-center text-background disabled:opacity-50 shrink-0 shadow-sm transition-transform active:scale-95">
-            <Send className="size-5 -ml-1" />
-          </button>
-          </div>
-        </form>
-      </div>
-    )
-  }
-
   return (
-    <div className="pb-4">
+    <>
+      <AnimatePresence>
+        {activeChat && (
+          <motion.div
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className="flex flex-col bg-background absolute inset-0 z-[100] safe-area-top"
+          >
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-border sticky top-0 bg-background z-10 shadow-sm">
+              <button onClick={closeChat} className="p-2 -mr-2 rounded-full hover:bg-secondary transition-colors">
+                <ArrowRight className="size-5" />
+              </button>
+
+              <div
+                className="flex items-center gap-3 flex-1 cursor-pointer hover:bg-secondary/50 rounded-lg p-1 -ml-1 transition-colors"
+                onClick={() => activeChat.user?.id && setSelectedUserId(activeChat.user.id)}
+              >
+                {activeChat.user?.avatar_url ? (
+                  <img src={activeChat.user.avatar_url} alt="" className="size-10 rounded-full object-cover" />
+                ) : (
+                  <div className="size-10 rounded-full bg-muted flex items-center justify-center font-bold text-muted-foreground">
+                    {(activeChat.user?.full_name || activeChat.user?.username || "م").charAt(0)}
+                  </div>
+                )}
+                <div className="flex flex-col">
+                  <span className="font-semibold text-sm flex items-center gap-1">
+                    {activeChat.user?.full_name || activeChat.user?.username || `مستخدم`}
+                    {activeChat.user?.is_verified && <BadgeCheck className="size-4 text-blue-500" />}
+                  </span>
+                  <span className="text-xs text-green-500">متصل الآن</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 [scrollbar-width:none] pb-32" onClick={() => setActiveLongPressId(null)}>
+              {loadingMessages ? (
+                <div className="flex justify-center py-4"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
+              ) : messages.length > 0 ? (
+                messages.map((msg) => (
+                  <MessageBubble
+                    key={msg.id}
+                    msg={msg}
+                    isMe={msg.sender_id === currentUser?.uid}
+                    isLongPressed={activeLongPressId === msg.id}
+                    setActiveLongPressId={setActiveLongPressId}
+                    setReplyingTo={setReplyingTo}
+                    currentUser={currentUser}
+                  />
+                ))
+              ) : (
+                <div className="text-center text-sm text-muted-foreground pt-10">ابدأ المحادثة الآن</div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+
+            <form onSubmit={sendMessage} className="absolute bottom-0 left-0 right-0 bg-background/80 backdrop-blur-md p-3 border-t border-border flex flex-col gap-2 safe-area-bottom">
+              <AnimatePresence>
+                {replyingTo && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, height: 0 }}
+                    animate={{ opacity: 1, y: 0, height: 'auto' }}
+                    exit={{ opacity: 0, y: 10, height: 0 }}
+                    className="flex items-center justify-between bg-primary/10 border-l-4 border-primary rounded-r-lg p-2.5 mx-1"
+                  >
+                    <div className="flex flex-col flex-1 overflow-hidden">
+                      <span className="text-xs font-bold text-primary mb-0.5">
+                        الرد على {replyingTo.sender_id === currentUser?.uid ? 'أنت' : (activeChat.user?.full_name || activeChat.user?.username || 'مستخدم')}
+                      </span>
+                      <span className="text-xs text-foreground/80 truncate">
+                        {replyingTo.content.replace(/\[REPLY\|.*?\]\s*/, '').replace(/^\[رد على: (.*?)\]\s*/, '')}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setReplyingTo(null)}
+                      className="p-1.5 hover:bg-background/50 rounded-full transition-colors ml-1"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              <div className="flex gap-2 w-full">
+              <input
+                type="text"
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                placeholder="اكتب رسالة..."
+                className="flex-1 rounded-full border border-border bg-card px-4 py-3 text-sm outline-none focus:border-foreground transition-colors shadow-sm"
+              />
+              <button type="submit" disabled={!newMessage.trim()} className="size-[44px] rounded-full bg-foreground flex items-center justify-center text-background disabled:opacity-50 shrink-0 shadow-sm transition-transform active:scale-95">
+                <Send className="size-5 -ml-1" />
+              </button>
+              </div>
+            </form>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="pb-4">
       <div className="px-4 pt-4">
         <div className="flex items-center gap-2 rounded-full bg-secondary px-4 py-2.5">
           <Search className="size-4 text-muted-foreground" />
@@ -592,52 +688,14 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
           <div className="flex justify-center py-10"><Loader2 className="size-8 animate-spin text-muted-foreground" /></div>
         ) : chats.length > 0 ? (
           <motion.ul variants={container} initial="hidden" animate="show">
-            {chats.map((chat) => {
-              const name = chat.user.full_name || chat.user.username || `مستخدم`
-
-              // Format time simple
-              const timeString = chat.lastMessageTime
-                ? new Date(chat.lastMessageTime).toLocaleTimeString('ar-SA', { hour: 'numeric', minute: 'numeric' })
-                : "الآن"
-
-              return (
-                <motion.li key={chat.id} variants={item}>
-                  <button onClick={() => openChat(chat.id, chat.user)} className="flex w-full items-center gap-3 px-4 py-3 text-right transition-colors hover:bg-secondary">
-                    <div
-                      onClick={(e) => { e.stopPropagation(); chat.user?.id && setSelectedUserId(chat.user.id); }}
-                    >
-                      {chat.user.avatar_url ? (
-                        <img src={chat.user.avatar_url} alt="" className="size-12 rounded-full object-cover" />
-                      ) : (
-                        <span className="flex size-12 items-center justify-center rounded-full bg-muted font-semibold text-muted-foreground">
-                          {name.charAt(0)}
-                        </span>
-                      )}
-                    </div>
-                    <span className="flex-1">
-                      <span className="flex items-center justify-between">
-                        <span
-                          className="text-sm font-semibold flex items-center gap-1 hover:underline"
-                          onClick={(e) => { e.stopPropagation(); chat.user?.id && setSelectedUserId(chat.user.id); }}
-                        >
-                          {name}
-                          {chat.user.is_verified && <BadgeCheck className="size-4 text-blue-500" />}
-                        </span>
-                        <span className="text-xs text-muted-foreground">{timeString}</span>
-                      </span>
-                      <span className="mt-0.5 flex items-center justify-between gap-2">
-                        <span className="block text-xs text-muted-foreground truncate">{chat.lastMessage}</span>
-                        {chat.unread > 0 && (
-                          <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-foreground text-[10px] font-bold text-background">
-                            {chat.unread}
-                          </span>
-                        )}
-                      </span>
-                    </span>
-                  </button>
-                </motion.li>
-              )
-            })}
+            {chats.map((chat) => (
+              <ConversationItem
+                key={chat.id}
+                chat={chat}
+                openChat={openChat}
+                setSelectedUserId={setSelectedUserId}
+              />
+            ))}
           </motion.ul>
         ) : (
           <div className="py-10 text-center text-sm text-muted-foreground">
@@ -646,5 +704,6 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
         )
       )}
     </div>
+    </>
   )
 }
