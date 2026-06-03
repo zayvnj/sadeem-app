@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { useStoriesStore } from '@/lib/stores/useStoriesStore'
 import { HomeFeed } from '@/components/sadeem/home-feed'
 import { NavigationProvider, useNavigation } from '@/components/sadeem/navigation-context'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
 
 jest.mock('@capacitor-community/media', () => ({
@@ -80,12 +81,22 @@ const mockStory = {
 }
 
 // A mock wrapper to spy on context changes
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: false,
+    },
+  },
+})
+
 const Wrapper = ({ children }: { children: React.ReactNode }) => {
   return (
-    <NavigationProvider>
-      {children}
-      <ContextSpy />
-    </NavigationProvider>
+    <QueryClientProvider client={queryClient}>
+      <NavigationProvider>
+        {children}
+        <ContextSpy />
+      </NavigationProvider>
+    </QueryClientProvider>
   )
 }
 

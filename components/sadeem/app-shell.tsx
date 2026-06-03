@@ -52,7 +52,20 @@ function AppShellContent() {
       setUser(currentUser)
       setLoadingAuth(false)
     })
-    return () => unsubscribe()
+
+    // Listen for custom event to switch tabs from deeply nested components
+    const handleSwitchTab = (e: Event) => {
+      const customEvent = e as CustomEvent
+      if (customEvent.detail) {
+        setActive(customEvent.detail as TabKey)
+      }
+    }
+    window.addEventListener('switch-tab', handleSwitchTab)
+
+    return () => {
+      unsubscribe()
+      window.removeEventListener('switch-tab', handleSwitchTab)
+    }
   }, [])
 
   // Capacitor Hardware Back Button Handler (PopScope Equivalent)

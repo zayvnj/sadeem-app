@@ -2,13 +2,15 @@
 
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Loader2, BadgeCheck } from "lucide-react"
+import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Loader2, BadgeCheck, Play } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { auth } from "@/lib/firebase"
 import { useNavigation } from "./navigation-context"
 import { StoryViewer } from "./story-viewer"
 import { StoryUpload } from "./story-upload"
 import { useStoryNavigation } from "./story/useStoryNavigation"
+import { useInfiniteQuery, useQuery, useQueryClient, useMutation } from "@tanstack/react-query"
+import { useInView } from "react-intersection-observer"
 
 const container = {
   hidden: { opacity: 0 },
@@ -24,84 +26,40 @@ const item = {
 }
 
 export function HomeFeed() {
-  const [posts, setPosts] = useState<any[]>([])
-  const [stories, setStories] = useState<any[]>([])
   const [viewedStoryIds, setViewedStoryIds] = useState<Set<string>>(new Set())
-  const [loading, setLoading] = useState(true)
   const { setSelectedUserId, storyViewerData, setStoryViewerData } = useNavigation()
 
   const { handleAvatarTap } = useStoryNavigation()
   const [currentUserAvatar, setCurrentUserAvatar] = useState<string | null>(null)
 
-  const fetchFeedData = async () => {
-    try {
+  // 1. Fetch current user context
+  const { data: userContext } = useQuery({
+    queryKey: ['userContext'],
+    queryFn: async () => {
       const user = auth?.currentUser
+      if (!user) return { user: null, followedIds: [] }
 
-      let followedIds: string[] = []
+      const { data: userData } = await supabase.from('users').select('avatar_url').eq('id', user.uid).single()
+      if (userData?.avatar_url) setCurrentUserAvatar(userData.avatar_url)
 
-      if (user) {
-        // Fetch current user avatar
-        const { data: userData } = await supabase
-          .from('users')
-          .select('avatar_url')
-          .eq('id', user.uid)
-          .single()
+      const { data: followsData } = await supabase.from('follows').select('following_id').eq('follower_id', user.uid)
+      const followedIds = followsData ? followsData.map(f => f.following_id) : []
+      followedIds.push(user.uid)
 
-        if (userData?.avatar_url) {
-          setCurrentUserAvatar(userData.avatar_url)
-        }
+      const { data: viewedData } = await supabase.from('story_views').select('story_id').eq('user_id', user.uid)
+      if (viewedData) setViewedStoryIds(new Set(viewedData.map(v => v.story_id)))
 
-        // Fetch users the current user follows
-        const { data: followsData } = await supabase
-          .from('follows')
-          .select('following_id')
-          .eq('follower_id', user.uid)
+      return { user, followedIds }
+    },
+    staleTime: 60000,
+  })
 
-        if (followsData) {
-          followedIds = followsData.map(f => f.following_id)
-        }
-        // Include self
-        followedIds.push(user.uid)
-
-        // Fetch viewed stories
-        const { data: viewedData } = await supabase
-          .from('story_views')
-          .select('story_id')
-          .eq('user_id', user.uid)
-
-        if (viewedData) {
-          setViewedStoryIds(new Set(viewedData.map(v => v.story_id)))
-        }
-      }
-
-      // Fetch posts
-      let postsQuery = supabase
-        .from('posts')
-        .select('*, users:user_id(id, full_name, username, avatar_url, is_verified), post_likes(user_id)')
-        .order('created_at', { ascending: false })
-        .limit(20)
-
-      // If user is logged in, only show their posts and posts of people they follow
-      if (user && followedIds.length > 0) {
-        postsQuery = postsQuery.in('user_id', followedIds)
-      }
-
-      const { data: postsData, error: postsError } = await postsQuery
-
-      if (postsError && postsError.code !== '42P01') console.error('Posts fetch error:', postsError)
-
-      const formattedPosts = (postsData || []).map((post: any) => {
-        const likesCount = post.post_likes ? post.post_likes.length : 0
-        const isLiked = user ? post.post_likes?.some((like: any) => like.user_id === user.uid) : false
-
-        return {
-          ...post,
-          likes_count: likesCount,
-          isLiked
-        }
-      })
-
-      // Filter out expired stories (e.g. 24 hours old)
+  // 2. Fetch Stories
+  const { data: stories = [], refetch: refetchStories } = useQuery({
+    queryKey: ['feed', 'stories'],
+    enabled: !!userContext,
+    queryFn: async () => {
+      const { user, followedIds } = userContext!
       const oneDayAgo = new Date()
       oneDayAgo.setDate(oneDayAgo.getDate() - 1)
 
@@ -109,82 +67,115 @@ export function HomeFeed() {
         .from('stories')
         .select('*, users:user_id(id, full_name, username, avatar_url, is_verified)')
         .gt('created_at', oneDayAgo.toISOString())
-        .order('created_at', { ascending: true }) // Grouping will handle recent ordering
+        .order('created_at', { ascending: true })
 
       if (user && followedIds.length > 0) {
         storiesQuery = storiesQuery.in('user_id', followedIds)
       }
 
-      const { data: storiesData, error: storiesError } = await storiesQuery
+      const { data: storiesData, error } = await storiesQuery
+      if (error && error.code !== '42P01') console.error('Stories fetch error:', error)
 
-      if (storiesError && storiesError.code !== '42P01') console.error('Stories fetch error:', storiesError)
-
-      // Group stories by user
       const groupedStories: Record<string, any[]> = {}
       ;(storiesData || []).forEach(story => {
-        if (!groupedStories[story.user_id]) {
-          groupedStories[story.user_id] = []
-        }
+        if (!groupedStories[story.user_id]) groupedStories[story.user_id] = []
         groupedStories[story.user_id].push(story)
       })
 
-      // Sort users by their most recent story
-      const userStoryGroups = Object.values(groupedStories).sort((a, b) => {
+      return Object.values(groupedStories).sort((a, b) => {
         const lastStoryA = a[a.length - 1]
         const lastStoryB = b[b.length - 1]
         return new Date(lastStoryB.created_at).getTime() - new Date(lastStoryA.created_at).getTime()
       })
+    },
+    staleTime: 60000,
+  })
 
-      setPosts(formattedPosts)
-      setStories(userStoryGroups)
-    } catch (error) {
-      console.error('Error fetching feed:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  // 3. Fetch Reels (Horizontal top bar)
+  const { data: reels = [] } = useQuery({
+    queryKey: ['feed', 'reels'],
+    enabled: !!userContext,
+    queryFn: async () => {
+      const { user, followedIds } = userContext!
+      let reelsQuery = supabase
+        .from('posts')
+        .select('*, users:user_id(id, full_name, username, avatar_url, is_verified)')
+        .eq('type', 'reel')
+        .order('created_at', { ascending: false })
+        .limit(15)
 
-  useEffect(() => {
-    fetchFeedData()
-  }, [])
-
-  const handleLike = async (postId: string, isDoubleTap = false) => {
-    try {
-      const user = auth?.currentUser
-      if (!user) {
-        alert("يجب تسجيل الدخول للإعجاب")
-        return
+      if (user && followedIds.length > 0) {
+        reelsQuery = reelsQuery.in('user_id', followedIds)
       }
 
-      const postIndex = posts.findIndex(p => p.id === postId)
-      if (postIndex === -1) return
+      const { data, error } = await reelsQuery
+      if (error && error.code !== '42P01') console.error('Reels fetch error:', error)
+      return data || []
+    },
+    staleTime: 60000,
+  })
 
-      const post = posts[postIndex]
-      const wasLiked = post.isLiked
+  // 4. Fetch Posts (Infinite Scroll)
+  const fetchPostsPage = async ({ pageParam = 0 }) => {
+    const { user, followedIds } = userContext!
+    const limit = 10
 
-      // Prevent unliking on double-tap
-      if (isDoubleTap && wasLiked) return
+    let postsQuery = supabase
+        .from('posts')
+        .select('*, users:user_id(id, full_name, username, avatar_url, is_verified), post_likes(user_id)')
+        .eq('type', 'post')
+        .order('created_at', { ascending: false })
+        .range(pageParam, pageParam + limit - 1)
 
-      const isNowLiked = !wasLiked
+    if (user && followedIds.length > 0) {
+      postsQuery = postsQuery.in('user_id', followedIds)
+    }
 
-      // Optimistic UI Update
-      setPosts(current =>
-        current.map(p => {
-          if (p.id === postId) {
-            return {
-              ...p,
-              isLiked: isNowLiked,
-              likes_count: isNowLiked ? (p.likes_count || 0) + 1 : Math.max(0, (p.likes_count || 1) - 1)
-            }
-          }
-          return p
-        })
-      )
+    const { data, error } = await postsQuery
+    if (error && error.code !== '42P01') console.error('Posts fetch error:', error)
 
+    const formattedPosts = (data || []).map((post: any) => {
+      const likesCount = post.post_likes ? post.post_likes.length : 0
+      const isLiked = user ? post.post_likes?.some((like: any) => like.user_id === user.uid) : false
+      return { ...post, likes_count: likesCount, isLiked }
+    })
+
+    return { data: formattedPosts, nextCursor: data?.length === limit ? pageParam + limit : null }
+  }
+
+  const {
+    data: postsData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    status: postsStatus
+  } = useInfiniteQuery({
+    queryKey: ['feed', 'posts'],
+    queryFn: fetchPostsPage,
+    enabled: !!userContext,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    initialPageParam: 0,
+    staleTime: 60000,
+  })
+
+  const { ref: loadMoreRef, inView } = useInView()
+
+  useEffect(() => {
+    if (inView && hasNextPage) {
+      fetchNextPage()
+    }
+  }, [inView, hasNextPage, fetchNextPage])
+
+  const posts = postsData?.pages.flatMap(page => page.data) || []
+  const loading = !userContext || postsStatus === 'pending'
+
+  const queryClient = useQueryClient()
+
+  // --- Like Mutation with Optimistic Updates ---
+  const toggleLikeMutation = useMutation({
+    mutationFn: async ({ postId, isNowLiked, user }: { postId: string; isNowLiked: boolean; user: any }) => {
       if (isNowLiked) {
-        // Only celebrate on new like
         window.dispatchEvent(new CustomEvent('mascot-action', { detail: 'celebrate' }))
-
         const { error } = await supabase.from('post_likes').insert({ post_id: postId, user_id: user.uid })
         if (error) throw error
       } else {
@@ -194,12 +185,105 @@ export function HomeFeed() {
           .eq('user_id', user.uid)
         if (error) throw error
       }
+    },
+    onMutate: async ({ postId, isNowLiked }) => {
+      await queryClient.cancelQueries({ queryKey: ['feed', 'posts'] })
+      const previousPosts = queryClient.getQueryData(['feed', 'posts'])
 
-    } catch (error) {
-      console.error('Error toggling like:', error)
-      fetchFeedData() // Revert on failure by refetching actual state
+      queryClient.setQueryData(['feed', 'posts'], (old: any) => {
+        if (!old || !old.pages) return old
+        return {
+          ...old,
+          pages: old.pages.map((page: any) => ({
+            ...page,
+            data: page.data.map((post: any) => {
+              if (post.id === postId) {
+                return {
+                  ...post,
+                  isLiked: isNowLiked,
+                  likes_count: isNowLiked ? (post.likes_count || 0) + 1 : Math.max(0, (post.likes_count || 1) - 1)
+                }
+              }
+              return post
+            })
+          }))
+        }
+      })
+      return { previousPosts }
+    },
+    onError: (err, variables, context: any) => {
+      if (context?.previousPosts) {
+        queryClient.setQueryData(['feed', 'posts'], context.previousPosts)
+      }
+      console.error('Error toggling like:', err)
+    },
+    onSettled: () => {
+      // Background re-fetch to ensure sync without disrupting UI
+      queryClient.invalidateQueries({ queryKey: ['feed', 'posts'] })
     }
+  })
+
+  const handleLike = (postId: string, isDoubleTap = false) => {
+    const user = auth?.currentUser
+    if (!user) {
+      alert("يجب تسجيل الدخول للإعجاب")
+      return
+    }
+
+    const post = posts.find(p => p.id === postId)
+    if (!post) return
+
+    const wasLiked = post.isLiked
+    if (isDoubleTap && wasLiked) return
+
+    toggleLikeMutation.mutate({ postId, isNowLiked: !wasLiked, user })
   }
+
+  // --- Save Mutation with Optimistic Updates ---
+  const toggleSaveMutation = useMutation({
+    mutationFn: async ({ postId, isNowSaved, user }: { postId: string; isNowSaved: boolean; user: any }) => {
+      if (isNowSaved) {
+        const { error } = await supabase.from('saves').insert({ post_id: postId, user_id: user.uid })
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('saves')
+          .delete()
+          .eq('post_id', postId)
+          .eq('user_id', user.uid)
+        if (error) throw error
+      }
+    },
+    onMutate: async ({ postId, isNowSaved }) => {
+      await queryClient.cancelQueries({ queryKey: ['feed', 'posts'] })
+      const previousPosts = queryClient.getQueryData(['feed', 'posts'])
+
+      queryClient.setQueryData(['feed', 'posts'], (old: any) => {
+        if (!old || !old.pages) return old
+        return {
+          ...old,
+          pages: old.pages.map((page: any) => ({
+            ...page,
+            data: page.data.map((post: any) => {
+              if (post.id === postId) {
+                return { ...post, isSaved: isNowSaved }
+              }
+              return post
+            })
+          }))
+        }
+      })
+      return { previousPosts }
+    },
+    onError: (err, variables, context: any) => {
+      if (context?.previousPosts) {
+        queryClient.setQueryData(['feed', 'posts'], context.previousPosts)
+      }
+      console.error('Error toggling save:', err)
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['feed', 'posts'] })
+    }
+  })
 
   // Exploding Heart Animation state
   const [explodingPostId, setExplodingPostId] = useState<string | null>(null)
@@ -224,7 +308,7 @@ export function HomeFeed() {
             initialStoryIndex={storyViewerData.initialIndex}
             onClose={() => {
               setStoryViewerData(null)
-              fetchFeedData() // Refresh to update seen states
+              refetchStories() // Refresh to update seen states
             }}
             onComplete={() => {
               // Find the index of the current user's stories in the main stories array
@@ -244,7 +328,7 @@ export function HomeFeed() {
               } else {
                 // We reached the end of all stories, close viewer
                 setStoryViewerData(null)
-                fetchFeedData()
+                refetchStories()
               }
             }}
           />
@@ -259,7 +343,7 @@ export function HomeFeed() {
         className="flex gap-4 overflow-x-auto px-4 py-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         <StoryUpload
-          onUploadComplete={fetchFeedData}
+          onUploadComplete={refetchStories}
           userAvatar={currentUserAvatar}
         />
 
@@ -294,6 +378,51 @@ export function HomeFeed() {
 
       <div className="h-px bg-border" />
 
+      {/* Reels Section (Horizontal UI) */}
+      {!loading && reels.length > 0 && (
+        <>
+          <div className="py-4 pl-4 pr-4 border-b border-border">
+            <h2 className="text-sm font-semibold mb-3 flex items-center gap-2">
+              <Play className="size-4" />
+              ريلز
+            </h2>
+            <div className="flex gap-3 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -mx-4 px-4 pb-2">
+              {reels.map((reel) => (
+                <div
+                  key={reel.id}
+                  className="relative shrink-0 w-32 aspect-[9/16] rounded-xl overflow-hidden bg-muted cursor-pointer group"
+                  onClick={() => {
+                     // Normally you would navigate to the reel viewer or switch tabs
+                     // Use a global event or another method to communicate tab changes since activeTab is in AppShell
+                     window.dispatchEvent(new CustomEvent('switch-tab', { detail: 'reels' }))
+                  }}
+                >
+                  {reel.media_url?.match(/\.(mp4|webm|ogg)$/i) ? (
+                    <video src={reel.media_url} className="size-full object-cover" />
+                  ) : (
+                    <img src={reel.media_url || ''} alt="Reel thumbnail" className="size-full object-cover" />
+                  )}
+                  <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-80 group-hover:opacity-100 transition-opacity">
+                    <Play className="size-8 text-white fill-white drop-shadow-md" />
+                  </div>
+                  <div className="absolute bottom-2 left-2 right-2 flex items-center gap-1.5">
+                    {reel.users?.avatar_url ? (
+                       <img src={reel.users.avatar_url} className="size-5 rounded-full border border-white/50" alt="" />
+                    ) : (
+                       <div className="size-5 rounded-full bg-white/20 border border-white/50" />
+                    )}
+                    <span className="text-[10px] text-white font-medium truncate drop-shadow-md">
+                      {reel.users?.username || reel.users?.full_name || "مستخدم"}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="h-2 bg-muted/30" />
+        </>
+      )}
+
       {/* Posts */}
       {loading ? (
         <div className="flex flex-col items-center justify-center py-12">
@@ -301,8 +430,19 @@ export function HomeFeed() {
         </div>
       ) : (
         <motion.div variants={container} initial="hidden" animate="show" className="flex flex-col">
-          {posts.length > 0 ? posts.map((post) => (
-            <motion.article key={post.id} variants={item} className="border-b border-border px-4 py-4">
+          {posts.length > 0 ? posts.map((post, index) => {
+            // Apply stagger effect ONLY on the first page load (first 10 items)
+            // For subsequent items (infinite scroll), apply a simple fade/slide without staggering
+            const isFirstPageItem = index < 10
+            return (
+            <motion.article
+              key={post.id}
+              variants={isFirstPageItem ? item : undefined}
+              initial={isFirstPageItem ? undefined : { opacity: 0, y: 20 }}
+              animate={isFirstPageItem ? undefined : { opacity: 1, y: 0 }}
+              transition={isFirstPageItem ? undefined : { type: "spring", stiffness: 260, damping: 26 }}
+              className="border-b border-border px-4 py-4"
+            >
               <div className="flex items-center gap-3">
                 <div
                   className="cursor-pointer"
@@ -406,7 +546,7 @@ export function HomeFeed() {
                       if (!user) return alert("يجب تسجيل الدخول");
                       try {
                          await supabase.from('post_comments').insert({ post_id: post.id, user_id: user.uid, text });
-                         fetchFeedData();
+                         queryClient.invalidateQueries({ queryKey: ['feed', 'posts'] });
                       } catch (e) {
                          console.error(e);
                       }
@@ -421,32 +561,36 @@ export function HomeFeed() {
                      navigator.clipboard.writeText(window.location.href).catch(() => {});
                   }}
                 />
-                <button
+                <motion.button
+                  whileTap={{ scale: 0.8 }}
                   className={`mr-auto text-foreground ${post.isSaved ? 'fill-foreground' : ''}`}
                   aria-label="حفظ"
-                  onClick={async () => {
+                  onClick={() => {
                     const user = auth?.currentUser;
                     if (!user) return alert("يجب تسجيل الدخول");
-                    setPosts(current => current.map(p => p.id === post.id ? { ...p, isSaved: !p.isSaved } : p));
-                    try {
-                      if (!post.isSaved) {
-                        await supabase.from('saves').insert({ post_id: post.id, user_id: user.uid });
-                      } else {
-                        await supabase.from('saves').delete().eq('post_id', post.id).eq('user_id', user.uid);
-                      }
-                    } catch(e) {
-                      console.error(e);
-                      fetchFeedData();
-                    }
+                    toggleSaveMutation.mutate({ postId: post.id, isNowSaved: !post.isSaved, user });
                   }}
                 >
-                  <Bookmark className={`size-5 ${post.isSaved ? 'fill-foreground' : ''}`} />
-                </button>
+                  <motion.div animate={post.isSaved ? { scale: [1, 1.2, 1] } : { scale: 1 }} transition={{ type: 'spring', stiffness: 300, damping: 15 }}>
+                    <Bookmark className={`size-5 ${post.isSaved ? 'fill-foreground' : ''}`} />
+                  </motion.div>
+                </motion.button>
               </div>
             </motion.article>
-          )) : (
+          )}) : (
             <div className="py-12 text-center text-muted-foreground">
               لا توجد منشورات حتى الآن. كن أول من ينشر!
+            </div>
+          )}
+
+          {/* Infinite Scroll trigger area */}
+          {!loading && hasNextPage && (
+            <div ref={loadMoreRef} className="py-8 flex justify-center">
+              {isFetchingNextPage ? (
+                <Loader2 className="size-6 animate-spin text-muted-foreground" />
+              ) : (
+                <div className="h-6" /> /* Spacing for the observer */
+              )}
             </div>
           )}
         </motion.div>
@@ -458,7 +602,7 @@ export function HomeFeed() {
 function ActionButton({ icon, label, onClick }: { icon: React.ReactNode; label?: string; onClick?: () => void }) {
   return (
     <motion.button
-      whileTap={{ scale: 0.85 }}
+      whileTap={{ scale: 0.8 }}
       onClick={onClick}
       className="flex items-center gap-1.5 text-sm"
     >
