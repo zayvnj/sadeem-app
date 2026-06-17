@@ -53,3 +53,5 @@ export function Mascot3D() {
     </div>
   )
 }
+
+// Do not preload here as it causes issues when dynamically loaded
