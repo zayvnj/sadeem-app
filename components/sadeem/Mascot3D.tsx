@@ -29,11 +29,6 @@ function Model() {
   )
 }
 
-// Ensure preloading only happens on the client to avoid Next.js SSR crashes
-if (typeof window !== "undefined") {
-  useGLTF.preload("/mascot.glb")
-}
-
 export function Mascot3D() {
   return (
     <div
