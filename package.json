@@ -92,6 +92,8 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/three": "^0.184.1",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^14.2.3",
     "jest-environment-jsdom": "^30.4.1",
     "postcss": "^8.5",
     "tailwindcss": "^4.2.0",

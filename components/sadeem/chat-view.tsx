@@ -205,6 +205,7 @@ const MessageBubble = React.memo(({
     </motion.div>
   )
 })
+MessageBubble.displayName = "MessageBubble"
 
 const ConversationItem = React.memo(({
   chat,
@@ -258,6 +259,7 @@ const ConversationItem = React.memo(({
     </motion.li>
   )
 })
+ConversationItem.displayName = "ConversationItem"
 
 export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
   const router = useRouter()
