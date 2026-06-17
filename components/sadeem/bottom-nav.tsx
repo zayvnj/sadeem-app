@@ -3,7 +3,9 @@
 import { motion } from "framer-motion"
 import { Home, Clapperboard, Sparkles, MessageCircle, User } from "lucide-react"
 import type { TabKey } from "./types"
-import { Mascot3D } from "./Mascot3D"
+import dynamic from "next/dynamic"
+
+const Mascot3D = dynamic(() => import("./Mascot3D").then(mod => mod.Mascot3D), { ssr: false })
 
 const tabs: { key: TabKey; label: string; icon: typeof Home }[] = [
   { key: "home", label: "الرئيسية", icon: Home },
