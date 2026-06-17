@@ -3,7 +3,7 @@
 import { motion } from "framer-motion"
 import { Home, Clapperboard, Sparkles, MessageCircle, User } from "lucide-react"
 import type { TabKey } from "./types"
-import { AstronautMascot } from "./AstronautMascot"
+import { Mascot3D } from "./Mascot3D"
 
 const tabs: { key: TabKey; label: string; icon: typeof Home }[] = [
   { key: "home", label: "الرئيسية", icon: Home },
@@ -29,7 +29,7 @@ export function BottomNav({
       }`}
       id="bottom-nav-container"
     >
-      <AstronautMascot activeTab={active} tabsKeys={tabs.map((t) => t.key)} dark={dark} />
+      <Mascot3D />
       {tabs.map((tab, index) => {
         const isActive = active === tab.key
 
