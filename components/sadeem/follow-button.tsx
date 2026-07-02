@@ -2,10 +2,10 @@
 
 import { useState } from "react"
 import { Loader2 } from "lucide-react"
-import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
-import { auth } from "@/lib/firebase"
-import { useQueryClient } from "@tanstack/react-query"
+import { useSession } from "next-auth/react"
+import { toggleFollow } from "@/app/actions/user"
+import { useQueryClient, useMutation } from "@tanstack/react-query"
 
 interface FollowButtonProps {
   userId: string
@@ -14,12 +14,11 @@ interface FollowButtonProps {
   className?: string
 }
 
-import { useMutation } from "@tanstack/react-query"
-
 export function FollowButton({ userId, initialIsFollowing, onToggleSuccess, className = "" }: FollowButtonProps) {
   const [isFollowing, setIsFollowing] = useState(initialIsFollowing)
   const queryClient = useQueryClient()
-  const currentUser = auth?.currentUser
+  const { data: session } = useSession()
+  const currentUser = session?.user
 
   const followMutation = useMutation({
     mutationFn: async () => {
@@ -27,27 +26,10 @@ export function FollowButton({ userId, initialIsFollowing, onToggleSuccess, clas
         throw new Error("يجب تسجيل الدخول")
       }
 
-      console.log("Follow Payload being sent:", { followerId: currentUser.uid, followingId: userId })
+      const res = await toggleFollow(userId)
+      if (!res.success) throw new Error(res.error)
 
-      if (isFollowing) {
-        // Unfollow request
-        const { error } = await supabase
-          .from("follows")
-          .delete()
-          .eq("follower_id", currentUser.uid)
-          .eq("following_id", userId)
-
-        if (error) throw error
-        return false
-      } else {
-        // Follow request
-        const { error } = await supabase
-          .from("follows")
-          .insert({ follower_id: currentUser.uid, following_id: userId })
-
-        if (error) throw error
-        return true
-      }
+      return res.data!.isFollowing
     },
     onSuccess: (newIsFollowing) => {
       setIsFollowing(newIsFollowing)

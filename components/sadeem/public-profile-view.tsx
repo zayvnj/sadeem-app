@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import { ChevronRight, Grid3x3, Film, Loader2, BadgeCheck } from "lucide-react"
-import { supabase } from "@/lib/supabase"
+import { ChevronRight, Grid3x3, Film, Loader2, BadgeCheck, Heart } from "lucide-react"
 import { toast } from "sonner"
-import { auth } from "@/lib/firebase"
+import { useSession } from "next-auth/react"
+import { getUserProfile, checkFollowStatus } from "@/app/actions/user"
+import { getUserPosts } from "@/app/actions/user"
 import { useQueryClient } from "@tanstack/react-query"
 import { FollowButton } from "./follow-button"
 
@@ -27,80 +28,53 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
   const [followersCount, setFollowersCount] = useState(0)
   const [followingCount, setFollowingCount] = useState(0)
   const [activeTab, setActiveTab] = useState("grid")
-  const currentUser = auth?.currentUser
+  const { data: session } = useSession()
+  const currentUser = session?.user
   const queryClient = useQueryClient()
 
-  const fetchProfileData = async () => {
-    try {
-      setLoading(true)
+  useEffect(() => {
+    const fetchProfileData = async () => {
+      try {
+        setLoading(true)
 
-      // Fetch user profile
-      const { data: userData, error: userError } = await supabase
-        .from("users")
-        .select("*")
-        .eq("id", userId)
-        .single()
-
-      if (userError) throw userError
-      setProfile(userData)
-
-      // Fetch follow stats
-      const { count: followers } = await supabase
-        .from("follows")
-        .select("*", { count: "exact", head: true })
-        .eq("following_id", userId)
-
-      const { count: following } = await supabase
-        .from("follows")
-        .select("*", { count: "exact", head: true })
-        .eq("follower_id", userId)
-
-      setFollowersCount(followers || 0)
-      setFollowingCount(following || 0)
-
-      // Check if current user is following
-      if (currentUser && currentUser.uid !== userId) {
-        const { data: followData, error: followError } = await supabase
-          .from("follows")
-          .select("*")
-          .eq("follower_id", currentUser.uid)
-          .eq("following_id", userId)
-          .maybeSingle()
-
-        if (followError && followError.code !== "PGRST116") {
-          console.error("Error fetching follow status:", followError)
+        // Fetch user profile
+        const profileRes = await getUserProfile(userId)
+        if (profileRes.success && profileRes.data) {
+          setProfile(profileRes.data)
+          setFollowersCount(profileRes.data.followersCount || 0)
+          setFollowingCount(profileRes.data.followingCount || 0)
         }
 
-        setIsFollowing(!!followData)
+        // Check if current user is following
+        if (currentUser && currentUser.id !== userId) {
+          const followRes = await checkFollowStatus(userId)
+          if (followRes.success) {
+            setIsFollowing(followRes.data!.isFollowing)
+          }
+        }
+
+        // Fetch user's posts
+        const postsRes = await getUserPosts(userId)
+        if (postsRes.success && postsRes.data) {
+          setPosts(postsRes.data as any[])
+        }
+
+      } catch (error) {
+        console.error("Error fetching profile:", error)
+      } finally {
+        setLoading(false)
       }
-
-      // Fetch user's posts
-      const { data: postsData, error: postsError } = await supabase
-        .from("posts")
-        .select("*")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-
-      if (postsError && postsError.code !== "42P01") throw postsError
-      setPosts(postsData || [])
-
-    } catch (error) {
-      console.error("Error fetching profile:", error)
-    } finally {
-      setLoading(false)
     }
-  }
 
-  useEffect(() => {
     fetchProfileData()
-  }, [userId])
+  }, [userId, currentUser])
 
   if (loading) {
     return (
       <div className="absolute inset-0 z-50 flex flex-col bg-background">
-        <header className="flex shrink-0 items-center px-4 py-3 border-b border-border">
-          <button onClick={onBack} className="p-2 -mr-2 rounded-full hover:bg-secondary transition-colors" aria-label="رجوع">
-             <ChevronRight className="size-6 text-foreground" />
+        <header className="flex h-14 shrink-0 items-center border-b border-border px-4">
+          <button onClick={onBack} className="p-2 -mr-2 rounded-full hover:bg-secondary transition-colors">
+            <ChevronRight className="size-6" />
           </button>
         </header>
         <div className="flex-1 flex items-center justify-center">
@@ -113,9 +87,9 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
   if (!profile) {
     return (
       <div className="absolute inset-0 z-50 flex flex-col bg-background">
-        <header className="flex shrink-0 items-center px-4 py-3 border-b border-border">
-          <button onClick={onBack} className="p-2 -mr-2 rounded-full hover:bg-secondary transition-colors" aria-label="رجوع">
-             <ChevronRight className="size-6 text-foreground" />
+        <header className="flex h-14 shrink-0 items-center border-b border-border px-4">
+          <button onClick={onBack} className="p-2 -mr-2 rounded-full hover:bg-secondary transition-colors">
+            <ChevronRight className="size-6" />
           </button>
         </header>
         <div className="flex-1 flex items-center justify-center text-muted-foreground">
@@ -125,129 +99,123 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
     )
   }
 
-  const filteredPosts = posts.filter(post =>
-    activeTab === "grid" ? post.type !== "reel" : post.type === "reel"
-  )
+  const username = profile.username || "مستخدم"
+  const fullName = profile.fullName || profile.full_name || "مستخدم سديم"
+  const bio = profile.bio || ""
+
+  const stats = [
+    { label: "منشور", value: posts.length.toString() },
+    { label: "متابِع", value: followersCount.toString() },
+    { label: "يتابع", value: followingCount.toString() },
+  ]
+
+  const isOwnProfile = currentUser?.id === userId
 
   return (
     <motion.div
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 20 }}
-      transition={{ duration: 0.2 }}
+      initial={{ x: "100%" }}
+      animate={{ x: 0 }}
+      exit={{ x: "100%" }}
+      transition={{ type: "spring", damping: 25, stiffness: 200 }}
       className="absolute inset-0 z-50 flex flex-col bg-background overflow-hidden"
     >
-      <header className="flex shrink-0 items-center gap-4 px-4 py-3 border-b border-border">
-        <button onClick={onBack} className="p-2 -mr-2 rounded-full hover:bg-secondary transition-colors" aria-label="رجوع">
-          <ChevronRight className="size-6 text-foreground" />
-        </button>
-        <h1 className="text-xl font-bold flex items-center gap-1">
-          {profile.username || profile.full_name}
-          {profile.is_verified && <BadgeCheck className="size-5 text-blue-500" />}
-        </h1>
+      <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4 sticky top-0 bg-background/80 backdrop-blur-md z-10">
+        <div className="flex items-center gap-3">
+          <button onClick={onBack} className="p-2 -mr-2 rounded-full hover:bg-secondary transition-colors">
+            <ChevronRight className="size-6" />
+          </button>
+          <span className="font-bold flex items-center gap-1">
+            {username}
+            {profile.is_verified && <BadgeCheck className="size-4 text-blue-500" />}
+          </span>
+        </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <div className="px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div className="relative">
-              {profile.avatar_url ? (
-                <img src={profile.avatar_url} alt="" className="size-20 rounded-full object-cover ring-2 ring-background" />
+      <div className="flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pb-20">
+        <div className="flex items-center gap-5 px-4 py-6">
+          <div className="rounded-full p-[3px] ring-2 ring-border shrink-0">
+            <div className="flex size-20 items-center justify-center rounded-full bg-secondary text-2xl font-bold text-foreground overflow-hidden">
+              {profile.avatarUrl || profile.avatar_url ? (
+                <img src={profile.avatarUrl || profile.avatar_url} alt="" className="size-full object-cover" />
               ) : (
-                <div className="size-20 rounded-full bg-muted flex items-center justify-center text-2xl font-bold text-muted-foreground ring-2 ring-background overflow-hidden">
-                  {(profile.full_name || profile.username || 'م').charAt(0)}
-                </div>
+                (profile.fullName || profile.full_name || "م").charAt(0)
               )}
             </div>
-
-            <div className="flex flex-1 items-center justify-around px-6 text-center">
-              <div>
-                <div className="text-xl font-bold">{posts.length}</div>
-                <div className="text-xs text-muted-foreground">منشورات</div>
-              </div>
-              <div>
-                <div className="text-xl font-bold">{followersCount}</div>
-                <div className="text-xs text-muted-foreground">متابعون</div>
-              </div>
-              <div>
-                <div className="text-xl font-bold">{followingCount}</div>
-                <div className="text-xs text-muted-foreground">يتابع</div>
-              </div>
-            </div>
           </div>
-
-          <div className="mt-4">
-            <h2 className="font-bold text-foreground flex items-center gap-1">
-              {profile.full_name}
-              {profile.is_verified && <BadgeCheck className="size-4 text-blue-500" />}
-            </h2>
-            {profile.bio && <p className="mt-1 text-sm text-foreground text-pretty">{profile.bio}</p>}
+          <div className="flex flex-1 justify-around">
+            {stats.map((s) => (
+              <div key={s.label} className="text-center">
+                <p className="text-lg font-bold leading-none text-foreground">{s.value}</p>
+                <p className="mt-1 text-xs text-muted-foreground font-medium">{s.label}</p>
+              </div>
+            ))}
           </div>
-
-          {currentUser?.uid !== userId && (
-            <div className="mt-6">
-              <FollowButton
-                userId={userId}
-                initialIsFollowing={isFollowing}
-                className="w-full"
-                onToggleSuccess={(newIsFollowing) => {
-                  setIsFollowing(newIsFollowing)
-                  setFollowersCount(c => newIsFollowing ? c + 1 : Math.max(0, c - 1))
-                }}
-              />
-            </div>
-          )}
         </div>
 
-        <div className="mt-4 flex border-b border-border">
-          {tabs.map((tab) => {
-            const Icon = tab.icon
-            const isActive = activeTab === tab.key
-            return (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`flex flex-1 flex-col items-center justify-center gap-1.5 py-3 transition-colors ${
-                  isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <Icon className={`size-5 ${isActive ? "fill-foreground" : ""}`} />
-                <span className="text-[10px] font-medium">{tab.label}</span>
-                {isActive && (
-                  <motion.div
-                    layoutId="tab-indicator"
-                    className="absolute bottom-0 h-0.5 w-16 bg-foreground"
-                  />
-                )}
-              </button>
-            )
-          })}
+        <div className="px-4 pb-4">
+          <h2 className="text-sm font-bold text-foreground">{fullName}</h2>
+          {bio && <p className="mt-1 text-sm text-muted-foreground leading-relaxed selectable-text">{bio}</p>}
         </div>
 
-        <div className="grid grid-cols-3 gap-0.5 mt-0.5 pb-20">
-          {filteredPosts.map((post) => (
-            <div key={post.id} className="aspect-square bg-muted relative">
-              {post.media_url ? (
+        {!isOwnProfile && (
+          <div className="px-4 pb-6 flex gap-2">
+            <FollowButton
+              userId={userId}
+              initialIsFollowing={isFollowing}
+              className="flex-1 py-2.5"
+              onToggleSuccess={(following) => {
+                setFollowersCount(prev => following ? prev + 1 : Math.max(0, prev - 1))
+              }}
+            />
+            <button className="flex-1 rounded-xl bg-secondary py-2.5 text-sm font-bold text-foreground hover:bg-secondary/80 transition-colors">
+              مراسلة
+            </button>
+          </div>
+        )}
+
+        {/* Tabs */}
+        <div className="flex border-y border-border">
+          {tabs.map((t, i) => (
+            <button
+              key={t.key}
+              onClick={() => setActiveTab(t.key)}
+              className={`flex flex-1 justify-center py-3.5 relative transition-colors hover:bg-secondary/50 ${
+                activeTab === t.key ? "text-foreground" : "text-muted-foreground"
+              }`}
+            >
+              <t.icon className={`size-5 transition-transform ${activeTab === t.key ? 'scale-110' : ''}`} />
+              {activeTab === t.key && (
+                <motion.div
+                  layoutId="activeTabIndicator"
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground"
+                />
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Grid */}
+        <div className="grid grid-cols-3 gap-[1px] bg-border/50">
+          {posts.map((post) => (
+            <div
+              key={post.id}
+              className="aspect-square bg-secondary relative overflow-hidden group cursor-pointer"
+            >
+              {post.media_url && (
                 post.media_url.match(/\.(mp4|webm|ogg)$/i) ? (
                   <video src={post.media_url} className="size-full object-cover" />
                 ) : (
-                  <img src={post.media_url} alt="" className="size-full object-cover" />
+                  <img src={post.media_url} alt="Post" className="size-full object-cover transition-transform duration-300 group-hover:scale-105" />
                 )
-              ) : (
-                <div className="size-full flex flex-col p-2 text-xs text-muted-foreground overflow-hidden selectable-text">
-                  <p className="line-clamp-4">{post.text}</p>
-                </div>
               )}
+              {/* Optional: Add hover overlay with likes/comments count */}
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 text-white font-bold text-sm">
+                 <span className="flex items-center gap-1"><Heart className="size-4 fill-white" /> {post.likesCount || 0}</span>
+              </div>
             </div>
           ))}
-          {filteredPosts.length === 0 && (
-            <div className="col-span-3 py-12 flex flex-col items-center justify-center text-muted-foreground gap-2">
-              <Grid3x3 className="size-12 opacity-20" />
-              <p className="text-sm">لا توجد {activeTab === "grid" ? "منشورات" : "ريلز"} بعد</p>
-            </div>
-          )}
         </div>
-      </main>
+      </div>
     </motion.div>
   )
 }

@@ -3,11 +3,10 @@
 import { useState, useEffect } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { Heart, Send, PlusSquare } from "lucide-react"
-import { onAuthStateChanged, User } from "firebase/auth"
-import { auth } from "@/lib/firebase"
 import { App } from '@capacitor/app'
 import { Capacitor } from '@capacitor/core'
 import { toast } from 'sonner'
+import { useSession } from "next-auth/react"
 import { BottomNav } from "./bottom-nav"
 import { HomeFeed } from "./home-feed"
 import { ReelsView } from "./reels-view"
@@ -35,8 +34,9 @@ const titles: Record<TabKey, string> = {
 
 function AppShellContent() {
   const [active, setActive] = useState<TabKey>("home")
-  const [user, setUser] = useState<User | null>(null)
-  const [loadingAuth, setLoadingAuth] = useState(true)
+  const { data: session, status } = useSession()
+  const loadingAuth = status === "loading"
+  const user = session?.user || null
   const [isSingleChatOpen, setIsSingleChatOpen] = useState(false)
   const { selectedUserId, setSelectedUserId } = useNavigation()
   const isReels = active === "reels"
@@ -44,15 +44,6 @@ function AppShellContent() {
   const [backPressCount, setBackPressCount] = useState(0)
 
   useEffect(() => {
-    if (!auth) {
-      setLoadingAuth(false)
-      return
-    }
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser)
-      setLoadingAuth(false)
-    })
-
     // Listen for custom event to switch tabs from deeply nested components
     const handleSwitchTab = (e: Event) => {
       const customEvent = e as CustomEvent
@@ -63,7 +54,6 @@ function AppShellContent() {
     window.addEventListener('switch-tab', handleSwitchTab)
 
     return () => {
-      unsubscribe()
       window.removeEventListener('switch-tab', handleSwitchTab)
     }
   }, [])

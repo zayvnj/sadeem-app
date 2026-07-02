@@ -3,8 +3,9 @@
 import React, { useState, useEffect, useRef, useCallback } from "react"
 import { motion, AnimatePresence, useAnimation } from "framer-motion"
 import { Sparkles, Search, Send, ArrowRight, Loader2, BadgeCheck, Reply, Copy, X } from "lucide-react"
-import { supabase } from "@/lib/supabase"
-import { auth } from "@/lib/firebase"
+import { toast } from "sonner"
+import { useSession } from "next-auth/react"
+import { getChats, getMessages, sendMessage as sendMessageAction } from "@/app/actions/chat"
 import { useNavigation } from "./navigation-context"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -38,290 +39,66 @@ const ReplyQuote = ({ replyId, replyName, replyText, isMe }: { replyId?: string,
           }
         }
       }}
-      className={`flex flex-col border-r-4 bg-background/10 rounded-l-md px-2 py-1 -mx-2 -mt-1 mb-1 cursor-pointer hover:bg-background/20 transition-colors ${isMe ? 'border-background/50' : 'border-primary'}`}
+      className={`relative mb-2 flex flex-col gap-1 overflow-hidden rounded-lg px-3 py-2 text-xs opacity-90 cursor-pointer hover:opacity-100 transition-opacity ${
+        isMe
+          ? "bg-primary-foreground/10 text-primary-foreground border-r-2 border-primary-foreground"
+          : "bg-secondary/50 text-foreground border-r-2 border-foreground"
+      }`}
     >
-      <span className={`text-xs font-bold truncate ${isMe ? 'text-background/90' : 'text-primary'}`}>{replyName}</span>
-      <span className="text-xs truncate opacity-80">{replyText}</span>
+      <span className="font-bold flex items-center gap-1 opacity-80">
+        <Reply className="size-3" />
+        {replyName}
+      </span>
+      <span className="line-clamp-2 leading-relaxed opacity-90 break-words w-[200px] sm:w-auto overflow-hidden text-ellipsis whitespace-nowrap">
+        {replyText}
+      </span>
     </div>
-  );
-};
-
-// Helper to extract clean message content for previews
-const cleanMessagePreview = (content: string) => {
-  const replyMatch = content.match(/^\[REPLY\|.*?\|.*?\|.*?\]\s*([\s\S]*)$/);
-  if (replyMatch) {
-    return replyMatch[1];
-  }
-  const legacyMatch = content.match(/^\[رد على: .*?\]\s*([\s\S]*)$/);
-  if (legacyMatch) {
-    return legacyMatch[1];
-  }
-  return content;
-};
-
-// Helper to parse reply messages
-const parseReply = (content: string) => {
-  const replyMatch = content.match(/^\[REPLY\|(.*?)\|(.*?)\|(.*?)\]\s*([\s\S]*)$/);
-  if (replyMatch) {
-    let [_, replyId, replyName, replyText, actualMessage] = replyMatch;
-    if (!replyText || replyText.trim() === '') {
-      replyText = 'مرفق أو رسالة محذوفة'; // Fallback for empty quoted text
-    }
-    return {
-      isReply: true,
-      replyId,
-      replyName,
-      replyText,
-      actualMessage
-    };
-  }
-
-  // Legacy format support
-  const legacyMatch = content.match(/^\[رد على: (.*?)\]\s*([\s\S]*)$/);
-  if (legacyMatch) {
-    let [_, replyText, actualMessage] = legacyMatch;
-    return {
-      isReply: true,
-      replyId: '',
-      replyName: 'مستخدم',
-      replyText,
-      actualMessage
-    };
-  }
-
-  return { isReply: false, actualMessage: content };
-};
-
-
-const MessageBubble = React.memo(({
-  msg,
-  isMe,
-  isLongPressed,
-  setActiveLongPressId,
-  setReplyingTo,
-  currentUser
-}: {
-  msg: any,
-  isMe: boolean,
-  isLongPressed: boolean,
-  setActiveLongPressId: (id: string | null) => void,
-  setReplyingTo: (msg: any) => void,
-  currentUser: any
-}) => {
-  return (
-    <motion.div
-      key={msg.id}
-      id={`msg-${msg.id}`}
-      initial={{ opacity: 0, scale: 0.9, y: 10 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      transition={{ type: "spring", stiffness: 400, damping: 25 }}
-      className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} relative`}
-    >
-      <motion.div
-        drag="x"
-        dragConstraints={{ left: 0, right: 0 }}
-        dragElastic={0.15}
-        onDragEnd={(e, info) => {
-          if (info.offset.x > 50) {
-            setReplyingTo(msg)
-          }
-        }}
-        className="max-w-[75%] relative"
-      >
-        <div
-          className={`rounded-2xl px-4 py-2 text-sm selectable-text cursor-pointer transition-transform ${isMe ? 'bg-foreground text-background rounded-tl-sm' : 'bg-secondary text-foreground rounded-tr-sm'}`}
-          onContextMenu={(e) => {
-            e.preventDefault()
-            setActiveLongPressId(isLongPressed ? null : msg.id)
-          }}
-          onTouchStart={(e) => {
-            const timer = setTimeout(() => {
-               setActiveLongPressId(msg.id)
-            }, 500)
-            e.currentTarget.dataset.timer = timer.toString()
-          }}
-          onTouchEnd={(e) => {
-            const timer = e.currentTarget.dataset.timer
-            if (timer) clearTimeout(parseInt(timer))
-          }}
-          onTouchMove={(e) => {
-            const timer = e.currentTarget.dataset.timer
-            if (timer) clearTimeout(parseInt(timer))
-          }}
-        >
-          {(() => {
-            const { isReply, replyId, replyName, replyText, actualMessage } = parseReply(msg.content);
-            if (isReply) {
-              return (
-                <div className="flex flex-col">
-                  <ReplyQuote
-                    replyId={replyId}
-                    replyName={replyName as string}
-                    replyText={replyText as string}
-                    isMe={isMe}
-                  />
-                  {actualMessage && actualMessage.trim() !== '' ? (
-                    <span>{actualMessage}</span>
-                  ) : (
-                    <span className="italic opacity-80 text-xs">محتوى غير نصي</span>
-                  )}
-                </div>
-              );
-            }
-            return msg.content;
-          })()}
-        </div>
-
-        <AnimatePresence>
-          {isLongPressed && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8, y: isMe ? 10 : -10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              className={`absolute z-20 flex gap-2 p-1.5 rounded-xl bg-background border border-border shadow-lg ${isMe ? '-top-12 right-0' : '-top-12 left-0'}`}
-            >
-               <button
-                 onClick={() => { setReplyingTo(msg); setActiveLongPressId(null); }}
-                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-secondary text-xs font-semibold transition-colors"
-               >
-                  <Reply className="size-3.5" />
-                  رد
-               </button>
-               <div className="w-px bg-border my-1" />
-               <button
-                 onClick={() => {
-                   navigator.clipboard.writeText(msg.content)
-                   setActiveLongPressId(null)
-                 }}
-                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-secondary text-xs font-semibold transition-colors"
-               >
-                  <Copy className="size-3.5" />
-                  نسخ
-               </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
-    </motion.div>
   )
-})
+}
 
-const ConversationItem = React.memo(({
-  chat,
-  openChat,
-  setSelectedUserId
-}: {
-  chat: any,
-  openChat: (id: string, user: any) => void,
-  setSelectedUserId: (id: string | null) => void
-}) => {
-  const name = chat.user.full_name || chat.user.username || `مستخدم`
-  const timeString = chat.lastMessageTime
-    ? new Date(chat.lastMessageTime).toLocaleTimeString('ar-SA', { hour: 'numeric', minute: 'numeric' })
-    : "الآن"
+function cleanMessagePreview(text: string): string {
+  if (!text) return 'لا توجد رسائل'
+  return text.replace(/\[REPLY\|.*?\]\s*/, '')
+}
 
-  return (
-    <motion.li variants={item}>
-      <button onClick={() => openChat(chat.id, chat.user)} className="flex w-full items-center gap-3 px-4 py-3 text-right transition-colors hover:bg-secondary">
-        <div
-          onClick={(e) => { e.stopPropagation(); chat.user?.id && setSelectedUserId(chat.user.id); }}
-        >
-          {chat.user.avatar_url ? (
-            <img src={chat.user.avatar_url} alt="" className="size-12 rounded-full object-cover" />
-          ) : (
-            <span className="flex size-12 items-center justify-center rounded-full bg-muted font-semibold text-muted-foreground">
-              {name.charAt(0)}
-            </span>
-          )}
-        </div>
-        <span className="flex-1">
-          <span className="flex items-center justify-between">
-            <span
-              className="text-sm font-semibold flex items-center gap-1 hover:underline"
-              onClick={(e) => { e.stopPropagation(); chat.user?.id && setSelectedUserId(chat.user.id); }}
-            >
-              {name}
-              {chat.user.is_verified && <BadgeCheck className="size-4 text-blue-500" />}
-            </span>
-            <span className="text-xs text-muted-foreground">{timeString}</span>
-          </span>
-          <span className="mt-0.5 flex items-center justify-between gap-2">
-            <span className="block text-xs text-muted-foreground truncate">{chat.lastMessage}</span>
-            {chat.unread > 0 && (
-              <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-foreground text-[10px] font-bold text-background">
-                {chat.unread}
-              </span>
-            )}
-          </span>
-        </span>
-      </button>
-    </motion.li>
-  )
-})
-
-export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
+export function ChatView({ onChatOpenStateChange }: ChatViewProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const queryClient = useQueryClient()
-  const currentUser = auth?.currentUser
-  const isOpeningRef = useRef(false)
 
-  const [activeChat, setActiveChat] = useState<any | null>(null)
-  const { setSelectedUserId } = useNavigation()
-  const [newMessage, setNewMessage] = useState("")
+  const [activeChat, setActiveChat] = useState<any>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<any[]>([])
-  const [replyingTo, setReplyingTo] = useState<any | null>(null)
+  const [newMessage, setNewMessage] = useState("")
+  const [replyingTo, setReplyingTo] = useState<any>(null)
+  const isOpeningRef = useRef(false)
+  const queryClient = useQueryClient()
+
+  // Long press handling
   const [activeLongPressId, setActiveLongPressId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
+  const { data: session } = useSession()
+  const currentUser = session?.user
+
   // 1. Fetch Chats with React Query
   const { data: chats = [], isLoading: loadingChats } = useQuery({
-    queryKey: ['chats', currentUser?.uid],
+    queryKey: ['chats', currentUser?.id],
     queryFn: async () => {
       if (!currentUser) return []
 
-      const { data: chatsData, error: chatsError } = await supabase
-        .from('chats')
-        .select('*')
-        .contains('participant_ids', [currentUser.uid])
-
-      if (chatsError && chatsError.code !== '42P01') console.error(chatsError)
-      const activeChats = chatsData || []
-
-      const enrichedChats = await Promise.all(activeChats.map(async (chat) => {
-        const otherParticipantId = chat.participant_ids.find((id: string) => id !== currentUser.uid) || chat.participant_ids[0]
-
-        const { data: userData } = await supabase
-          .from('users')
-          .select('id, full_name, username, avatar_url, is_verified')
-          .eq('id', otherParticipantId)
-          .single()
-
-        const { data: msgData } = await supabase
-          .from('messages')
-          .select('content, created_at')
-          .eq('chat_id', chat.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-
-        return {
-          id: chat.id,
-          user: userData || { id: otherParticipantId, full_name: 'مستخدم غير معروف', username: '', avatar_url: '', is_verified: false },
-          lastMessage: msgData ? cleanMessagePreview(msgData.content) : 'لا توجد رسائل',
-          lastMessageTime: msgData?.created_at,
-          unread: 0
-        }
-      }))
-
-      enrichedChats.sort((a, b) => {
-        if (!a.lastMessageTime) return 1;
-        if (!b.lastMessageTime) return -1;
-        return new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime();
-      });
-
-      return enrichedChats
+      const res = await getChats()
+      if (res.success && res.data) {
+        return res.data.map(chat => ({
+          ...chat,
+          user: {
+            ...chat.user,
+            full_name: chat.user.fullName
+          },
+          lastMessage: chat.lastMessage?.text ? cleanMessagePreview(chat.lastMessage.text) : (chat.lastMessage?.mediaUrl ? 'صورة' : 'لا توجد رسائل'),
+          lastMessageTime: chat.lastMessage?.createdAt,
+        }))
+      }
+      return []
     },
     enabled: !!currentUser,
     staleTime: 60000,
@@ -329,104 +106,49 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
 
   // 2. Fetch Messages with React Query
   const { data: messages = [], isLoading: loadingMessages } = useQuery({
-    queryKey: ['messages', activeChat?.id],
+    queryKey: ['messages', activeChat?.user?.id],
     queryFn: async () => {
-      if (!activeChat?.id) return []
-      const { data, error } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('chat_id', activeChat.id)
-        .order('created_at', { ascending: true })
-
-      if (error && error.code !== '42P01') console.error(error)
-      return data || []
+      if (!activeChat?.user?.id) return []
+      const res = await getMessages(activeChat.user.id)
+      if (res.success && res.data) {
+        return res.data.map(m => ({
+          ...m,
+          content: m.text, // mapped for UI compatibility
+          sender_id: m.senderId
+        }))
+      }
+      return []
     },
-    enabled: !!activeChat?.id,
+    enabled: !!activeChat?.user?.id,
     staleTime: 60000,
   })
 
-  // Listen to Global Messages for Chat List Updates
+  // Simulate real-time by polling
   useEffect(() => {
     if (!currentUser) return;
-    const channel = supabase
-      .channel('public:messages')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => {
-        if (!activeChat) {
-          queryClient.invalidateQueries({ queryKey: ['chats', currentUser.uid] })
-        }
-      })
-      .subscribe()
+    const interval = setInterval(() => {
+      queryClient.invalidateQueries({ queryKey: ['chats', currentUser.id] })
+      if (activeChat?.user?.id) {
+         queryClient.invalidateQueries({ queryKey: ['messages', activeChat.user.id] })
+      }
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [currentUser, queryClient, activeChat])
 
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [activeChat, currentUser, queryClient])
-
-  // Sync Search Query
+  // Placeholder for local search
   useEffect(() => {
-    const searchUsers = async () => {
-      if (!searchQuery.trim()) {
-        setSearchResults([])
-        return
-      }
-
-      const { data, error } = await supabase
-        .from('users')
-        .select('id, full_name, username, avatar_url, is_verified')
-        .ilike('username', `%${searchQuery}%`)
-        .neq('id', currentUser?.uid)
-        .limit(5)
-
-      if (error) {
-        console.error("Error searching users:", error)
-      } else {
-        setSearchResults(data || [])
-      }
+    if (!searchQuery.trim()) {
+      setSearchResults([])
     }
-
-    const debounce = setTimeout(() => {
-      searchUsers()
-    }, 300)
-
-    return () => clearTimeout(debounce)
-  }, [searchQuery, currentUser?.uid])
+  }, [searchQuery])
 
   const handleUserSelect = async (selectedUser: any) => {
     if (!currentUser) return
     setSearchQuery("")
     setSearchResults([])
 
-    // Check if chat already exists
-    const { data: existingChats, error: checkError } = await supabase
-      .from('chats')
-      .select('id')
-      .contains('participant_ids', [currentUser.uid, selectedUser.id])
-
-    let chatId = null
-
-    if (existingChats && existingChats.length > 0) {
-      // Use existing chat
-      chatId = existingChats[0].id
-    } else {
-      // Create new chat
-      const { data: newChat, error: createError } = await supabase
-        .from('chats')
-        .insert({
-          participant_ids: [currentUser.uid, selectedUser.id],
-        })
-        .select('id')
-        .single()
-
-      if (createError) {
-        alert("Insert Error: " + JSON.stringify(createError))
-        console.error("Error creating chat:", createError)
-        return
-      }
-      chatId = newChat.id
-    }
-
-    // Open the chat
-    openChat(chatId, selectedUser)
+    // Use other user's ID as chat ID
+    openChat(selectedUser.id, selectedUser)
   }
 
   const openChat = useCallback(async (chatId: string, chatUser: any) => {
@@ -442,20 +164,29 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
     // If we just clicked openChat, ignore the first param check while URL is transitioning
     if (isOpeningRef.current) {
       if (chatIdParam) {
-        // Once URL finally updates to match, we can release the lock
-        isOpeningRef.current = false
+        isOpeningRef.current = false // url is now in sync
       }
       return
     }
 
     if (!chatIdParam && activeChat) {
+      // Hardware back button or browser back popped the parameter
       setActiveChat(null)
       if (onChatOpenStateChange) onChatOpenStateChange(false)
+    } else if (chatIdParam && !activeChat && chats.length > 0) {
+       // Deep link or refresh, try to find the chat
+       const existingChat = chats.find(c => c.id === chatIdParam)
+       if (existingChat) {
+         setActiveChat({ id: existingChat.id, user: existingChat.user })
+         if (onChatOpenStateChange) onChatOpenStateChange(true)
+       }
     }
-  }, [searchParams, activeChat, onChatOpenStateChange])
+  }, [searchParams, activeChat, chats, onChatOpenStateChange])
 
   const closeChat = () => {
-    router.back() // This handles URL state natively
+    setActiveChat(null)
+    if (onChatOpenStateChange) onChatOpenStateChange(false)
+    router.back() // This handles popping the ?chatId param naturally
   }
 
   useEffect(() => {
@@ -464,45 +195,11 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
     }
   }, [messages])
 
-  useEffect(() => {
-    if (!activeChat?.id) return;
-
-    // Subscribe to realtime messages for this specific chat
-    const messageChannel = supabase
-      .channel(`chat:${activeChat.id}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'messages',
-        filter: `chat_id=eq.${activeChat.id}`
-      }, (payload) => {
-        // Only add if we didn't just send it (to avoid double adding optimistic UI messages)
-        if (payload.new.sender_id !== currentUser?.uid) {
-           queryClient.setQueryData(['messages', activeChat.id], (old: any) => {
-             return [...(old || []), payload.new]
-           })
-        }
-      })
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(messageChannel)
-    }
-  }, [activeChat?.id, currentUser?.uid]);
-
-  const sendMessage = async (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newMessage.trim() || !activeChat || !currentUser) return
 
-    if (!activeChat.id || typeof activeChat.id !== 'string' || activeChat.id.length < 10) {
-      alert("Invalid chat_id: " + activeChat.id);
-      return;
-    }
-
-    // New struct: [REPLY|msgId|senderId|quotedText] Actual message
-    // senderName can be fetched or we store senderId.
-    // However, to keep it simple and robust, we can just store the original text and sender name in the prefix
-    const senderNameRaw = replyingTo?.sender_id === currentUser?.uid ? 'أنت' : (activeChat.user?.full_name || activeChat.user?.username || 'مستخدم')
+    const senderNameRaw = replyingTo?.sender_id === currentUser?.id ? 'أنت' : (activeChat.user?.full_name || activeChat.user?.username || 'مستخدم')
     const senderName = senderNameRaw.replace(/\|/g, '')
     const quotedText = replyingTo ? replyingTo.content.replace(/\[REPLY\|.*?\]\s*/, '').substring(0, 50).replace(/\|/g, '') + '...' : ''
     const replyContent = replyingTo ? `[REPLY|${replyingTo.id}|${senderName}|${quotedText}] ${newMessage}` : newMessage
@@ -510,31 +207,28 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
     const tempMessage = {
       id: Date.now().toString(),
       chat_id: activeChat.id,
-      sender_id: currentUser.uid,
+      sender_id: currentUser.id,
       content: replyContent,
       created_at: new Date().toISOString()
     }
 
     try {
-      const { error } = await supabase.from('messages').insert({
-        chat_id: activeChat.id,
-        sender_id: currentUser.uid,
-        content: replyContent,
-        // In a real app we would have a reply_to_id column, but using content prefix for now
+      // Optimistic update
+      queryClient.setQueryData(['messages', activeChat.user.id], (old: any) => {
+        return [...(old || []), tempMessage]
       })
 
-      if (error) {
-        alert("Insert Error: " + JSON.stringify(error))
+      const res = await sendMessageAction(activeChat.user.id, replyContent)
+
+      if (!res.success) {
+        alert("Insert Error: " + res.error)
         return
       }
 
-      queryClient.setQueryData(['messages', activeChat.id], (old: any) => {
-        return [...(old || []), tempMessage]
-      })
       setNewMessage("")
       setReplyingTo(null)
     } catch (error) {
-      alert("Insert Error: " + JSON.stringify(error))
+      alert("Error sending message")
       console.error('Error sending message:', error)
     }
   }
@@ -557,61 +251,180 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
 
               <div
                 className="flex items-center gap-3 flex-1 cursor-pointer hover:bg-secondary/50 rounded-lg p-1 -ml-1 transition-colors"
-                onClick={() => activeChat.user?.id && setSelectedUserId(activeChat.user.id)}
+                onClick={() => {
+                  /* Navigate to user profile */
+                }}
               >
                 {activeChat.user?.avatar_url ? (
-                  <img src={activeChat.user.avatar_url} alt="" className="size-10 rounded-full object-cover" />
+                  <img src={activeChat.user.avatar_url} alt="" className="size-10 rounded-full object-cover shadow-sm" />
                 ) : (
-                  <div className="size-10 rounded-full bg-muted flex items-center justify-center font-bold text-muted-foreground">
+                  <div className="flex size-10 items-center justify-center rounded-full bg-secondary font-bold text-foreground shadow-sm">
                     {(activeChat.user?.full_name || activeChat.user?.username || "م").charAt(0)}
                   </div>
                 )}
                 <div className="flex flex-col">
-                  <span className="font-semibold text-sm flex items-center gap-1">
-                    {activeChat.user?.full_name || activeChat.user?.username || `مستخدم`}
+                  <span className="font-bold flex items-center gap-1">
+                    {activeChat.user?.full_name || activeChat.user?.username}
                     {activeChat.user?.is_verified && <BadgeCheck className="size-4 text-blue-500" />}
                   </span>
-                  <span className="text-xs text-green-500">متصل الآن</span>
+                  {activeChat.user?.is_online && (
+                    <span className="text-xs text-green-500 flex items-center gap-1">
+                      <span className="relative flex size-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full size-2 bg-green-500"></span>
+                      </span>
+                      متصل الآن
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 [scrollbar-width:none] pb-32" onClick={() => setActiveLongPressId(null)}>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden bg-secondary/10 relative">
               {loadingMessages ? (
-                <div className="flex justify-center py-4"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
-              ) : messages.length > 0 ? (
-                messages.map((msg) => (
-                  <MessageBubble
-                    key={msg.id}
-                    msg={msg}
-                    isMe={msg.sender_id === currentUser?.uid}
-                    isLongPressed={activeLongPressId === msg.id}
-                    setActiveLongPressId={setActiveLongPressId}
-                    setReplyingTo={setReplyingTo}
-                    currentUser={currentUser}
-                  />
-                ))
+                <div className="flex justify-center py-10">
+                  <Loader2 className="size-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : messages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-muted-foreground opacity-70">
+                  <div className="size-20 rounded-full bg-secondary flex items-center justify-center mb-4">
+                    <Send className="size-8 opacity-50" />
+                  </div>
+                  <p>ابدأ المحادثة مع {activeChat.user?.full_name || activeChat.user?.username}</p>
+                </div>
               ) : (
-                <div className="text-center text-sm text-muted-foreground pt-10">ابدأ المحادثة الآن</div>
+                messages.map((msg: any) => {
+                  const isMe = msg.sender_id === currentUser?.id
+                  const isLongPressed = activeLongPressId === msg.id
+
+                  // Parse Reply Metadata
+                  // Pattern: [REPLY|msgId|senderName|quotedText] Actual text
+                  let actualContent = msg.content
+                  let replyData = null
+
+                  const replyMatch = msg.content?.match(/^\[REPLY\|(.*?)\|(.*?)\|(.*?)\]\s*([\s\S]*)$/)
+
+                  if (replyMatch) {
+                    replyData = {
+                      id: replyMatch[1],
+                      name: replyMatch[2],
+                      text: replyMatch[3],
+                    }
+                    actualContent = replyMatch[4]
+                  } else if (msg.content?.startsWith('[رد على: ')) {
+                      // Fallback for older format if needed
+                      actualContent = msg.content
+                  }
+
+                  let pressTimer: NodeJS.Timeout
+                  const handleTouchStart = () => {
+                    pressTimer = setTimeout(() => {
+                      setActiveLongPressId(msg.id)
+                      if (navigator.vibrate) navigator.vibrate(50)
+                    }, 500)
+                  }
+                  const handleTouchEnd = () => clearTimeout(pressTimer)
+
+                  return (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      key={msg.id}
+                      id={`msg-${msg.id}`}
+                      className={`flex flex-col relative w-full ${isMe ? 'items-end' : 'items-start'}`}
+                      onTouchStart={handleTouchStart}
+                      onTouchEnd={handleTouchEnd}
+                      onTouchCancel={handleTouchEnd}
+                      onMouseDown={handleTouchStart}
+                      onMouseUp={handleTouchEnd}
+                      onMouseLeave={handleTouchEnd}
+                    >
+                      <div className="relative group max-w-[85%] sm:max-w-[75%]">
+                        <div
+                          className={`rounded-2xl px-4 py-2.5 shadow-sm text-sm relative break-words min-w-0 selectable-text ${
+                            isMe ? "bg-primary text-primary-foreground rounded-tl-sm" : "bg-card border border-border text-foreground rounded-tr-sm"
+                          } ${isLongPressed ? 'ring-2 ring-blue-500 scale-[0.98] transition-transform' : ''}`}
+                        >
+                          {replyData && (
+                            <ReplyQuote
+                              replyId={replyData.id}
+                              replyName={replyData.name}
+                              replyText={replyData.text}
+                              isMe={isMe}
+                            />
+                          )}
+                          <p className="whitespace-pre-wrap leading-relaxed min-w-[20px] max-w-full overflow-hidden break-words">{actualContent}</p>
+                          <span className={`text-[10px] block mt-1 opacity-70 flex-shrink-0 ${isMe ? "text-primary-foreground text-left" : "text-muted-foreground text-right"}`}>
+                            {new Date(msg.created_at).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+
+                        {/* Action Menu (Desktop hover or Mobile long press) */}
+                        <AnimatePresence>
+                          {(isLongPressed || false) && ( // Simplified for mobile focus
+                            <motion.div
+                              initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                              animate={{ opacity: 1, scale: 1, y: 0 }}
+                              exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                              className={`absolute top-full mt-2 z-50 flex items-center gap-1 bg-background border border-border rounded-xl shadow-xl p-1.5 ${isMe ? 'right-0' : 'left-0'}`}
+                            >
+                              <button
+                                onClick={() => {
+                                  setReplyingTo(msg)
+                                  setActiveLongPressId(null)
+                                }}
+                                className="flex items-center gap-2 px-3 py-2 hover:bg-secondary rounded-lg text-xs font-semibold whitespace-nowrap transition-colors"
+                              >
+                                <Reply className="size-4" />
+                                رد
+                              </button>
+                              <div className="w-px h-6 bg-border mx-1" />
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(actualContent)
+                                  setActiveLongPressId(null)
+                                  toast.success("تم النسخ")
+                                }}
+                                className="flex items-center gap-2 px-3 py-2 hover:bg-secondary rounded-lg text-xs font-semibold whitespace-nowrap transition-colors"
+                              >
+                                <Copy className="size-4" />
+                                نسخ
+                              </button>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    </motion.div>
+                  )
+                })
               )}
               <div ref={messagesEndRef} />
             </div>
 
-            <form onSubmit={sendMessage} className="absolute bottom-0 left-0 right-0 bg-background/80 backdrop-blur-md p-3 border-t border-border flex flex-col gap-2 safe-area-bottom">
+            {/* Click outside to close action menu */}
+            {activeLongPressId && (
+               <div
+                 className="absolute inset-0 z-40 bg-black/5"
+                 onClick={() => setActiveLongPressId(null)}
+               />
+            )}
+
+            <form onSubmit={handleSendMessage} className="p-3 bg-background border-t border-border flex flex-col gap-2 relative z-50">
               <AnimatePresence>
                 {replyingTo && (
                   <motion.div
-                    initial={{ opacity: 0, y: 10, height: 0 }}
-                    animate={{ opacity: 1, y: 0, height: 'auto' }}
-                    exit={{ opacity: 0, y: 10, height: 0 }}
-                    className="flex items-center justify-between bg-primary/10 border-l-4 border-primary rounded-r-lg p-2.5 mx-1"
+                    initial={{ opacity: 0, height: 0, y: 10 }}
+                    animate={{ opacity: 1, height: 'auto', y: 0 }}
+                    exit={{ opacity: 0, height: 0, y: 10 }}
+                    className="flex items-center justify-between bg-secondary/50 rounded-xl p-3 border-l-4 border-foreground"
                   >
-                    <div className="flex flex-col flex-1 overflow-hidden">
-                      <span className="text-xs font-bold text-primary mb-0.5">
-                        الرد على {replyingTo.sender_id === currentUser?.uid ? 'أنت' : (activeChat.user?.full_name || activeChat.user?.username || 'مستخدم')}
+                    <div className="flex flex-col overflow-hidden min-w-0 pr-2">
+                      <span className="text-xs font-bold flex items-center gap-1 mb-1">
+                        <Reply className="size-3 text-foreground" />
+                        الرد على {replyingTo.sender_id === currentUser?.id ? 'نفسك' : (activeChat.user?.full_name || activeChat.user?.username)}
                       </span>
-                      <span className="text-xs text-foreground/80 truncate">
-                        {replyingTo.content.replace(/\[REPLY\|.*?\]\s*/, '').replace(/^\[رد على: (.*?)\]\s*/, '')}
+                      <span className="text-sm text-muted-foreground truncate w-[250px] sm:w-[350px]">
+                        {replyingTo.content.replace(/\[REPLY\|.*?\]\s*/, '')}
                       </span>
                     </div>
                     <button
@@ -632,7 +445,7 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
                 placeholder="اكتب رسالة..."
                 className="flex-1 rounded-full border border-border bg-card px-4 py-3 text-sm outline-none focus:border-foreground transition-colors shadow-sm"
               />
-              <button type="submit" disabled={!newMessage.trim()} className="size-[44px] rounded-full bg-foreground flex items-center justify-center text-background disabled:opacity-50 shrink-0 shadow-sm transition-transform active:scale-95">
+              <button onClick={handleSendMessage} type="submit" disabled={!newMessage.trim()} className="size-[44px] rounded-full bg-foreground flex items-center justify-center text-background disabled:opacity-50 shrink-0 shadow-sm transition-transform active:scale-95">
                 <Send className="size-5 -ml-1" />
               </button>
               </div>
@@ -683,27 +496,64 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps = {}) {
         </div>
       )}
 
-      {!searchQuery && (
-        loadingChats ? (
-          <div className="flex justify-center py-10"><Loader2 className="size-8 animate-spin text-muted-foreground" /></div>
-        ) : chats.length > 0 ? (
-          <motion.ul variants={container} initial="hidden" animate="show">
-            {chats.map((chat) => (
-              <ConversationItem
-                key={chat.id}
-                chat={chat}
-                openChat={openChat}
-                setSelectedUserId={setSelectedUserId}
-              />
-            ))}
-          </motion.ul>
-        ) : (
-          <div className="py-10 text-center text-sm text-muted-foreground">
-            لا توجد محادثات. ابحث عن مستخدمين لبدء الدردشة.
+      <motion.div variants={container} initial="hidden" animate="show" className="mt-4 flex flex-col gap-1 px-3">
+        {loadingChats ? (
+          <div className="flex justify-center py-10">
+            <Loader2 className="size-8 animate-spin text-muted-foreground" />
           </div>
-        )
-      )}
-    </div>
+        ) : chats.length > 0 ? (
+          chats.map((chat) => (
+            <motion.button
+              key={chat.id}
+              variants={item}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => openChat(chat.id, chat.user)}
+              className="flex items-center gap-3 rounded-2xl p-3 text-right hover:bg-secondary/60 transition-colors relative"
+            >
+              <div className="relative shrink-0">
+                {chat.user?.avatar_url ? (
+                  <img src={chat.user.avatar_url} alt="" className="size-14 rounded-full object-cover shadow-sm border border-border/50" />
+                ) : (
+                  <div className="flex size-14 items-center justify-center rounded-full bg-secondary font-bold text-foreground shadow-sm border border-border/50 text-xl">
+                    {(chat.user?.full_name || chat.user?.username || "م").charAt(0)}
+                  </div>
+                )}
+                {chat.user?.is_online && (
+                  <span className="absolute bottom-0.5 right-0.5 size-3.5 rounded-full bg-green-500 border-2 border-background ring-1 ring-green-500/20" />
+                )}
+              </div>
+              <div className="flex flex-1 flex-col overflow-hidden min-w-0 pr-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-[15px] truncate flex items-center gap-1">
+                    {chat.user?.full_name || chat.user?.username}
+                    {chat.user?.is_verified && <BadgeCheck className="size-4 text-blue-500 shrink-0" />}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground shrink-0 font-medium opacity-80 whitespace-nowrap">
+                    {chat.lastMessageTime && new Date(chat.lastMessageTime).toLocaleDateString('ar-SA', { month: 'short', day: 'numeric' })}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between mt-1 gap-2">
+                  <p className={`truncate text-sm opacity-90 leading-relaxed ${chat.unread > 0 ? "font-bold text-foreground" : "text-muted-foreground"}`}>
+                    {chat.lastMessage}
+                  </p>
+                  {chat.unread > 0 && (
+                    <span className="flex size-[18px] shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground shadow-sm">
+                      {chat.unread}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </motion.button>
+          ))
+        ) : !searchQuery && (
+          <div className="flex flex-col items-center justify-center py-20 text-muted-foreground opacity-70">
+            <Sparkles className="size-12 mb-4 text-primary opacity-50" />
+            <p className="font-semibold">لا توجد محادثات</p>
+            <p className="text-sm mt-1">ابحث عن أصدقائك لبدء الدردشة</p>
+          </div>
+        )}
+      </motion.div>
+      </div>
     </>
   )
 }

@@ -18,3 +18,5 @@ out/
 # Android Keystore
 *.jks
 *.keystore
+
+/lib/generated/prisma

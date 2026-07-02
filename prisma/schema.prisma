@@ -1,0 +1,135 @@
+// 1. الإعدادات الأساسية
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// 2. الجداول (المجرات والنجوم في تطبيق سديم)
+// ==========================================
+
+// جدول المستخدمين
+model User {
+  id        String   @id @default(uuid())
+  username  String   @unique
+  email     String   @unique
+  fullName  String?
+  bio       String?
+  avatarUrl String?
+  isOnline  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // العلاقات
+  posts         Post[]
+  stories       Story[]
+  comments      Comment[]
+  likes         Like[]
+  messagesSent  Message[] @relation("Sender")
+  messagesRecv  Message[] @relation("Receiver")
+
+  // نظام المتابعة
+  followers     Follow[] @relation("UserFollowers")
+  following     Follow[] @relation("UserFollowing")
+
+  // الإشعارات
+  notifications Notification[]
+}
+
+// جدول نظام المتابعة (Followers & Following)
+model Follow {
+  id          Int      @id @default(autoincrement())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower    User     @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId]) // يمنع متابعة نفس الشخص مرتين
+}
+
+// جدول المنشورات والريلز (Posts & Reels)
+model Post {
+  id        String   @id @default(uuid())
+  caption   String?
+  mediaUrl  String
+  mediaType String   @default("IMAGE") // يمكن أن يكون: IMAGE (صورة), VIDEO (فيديو), REEL (ريلز)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  comments  Comment[]
+  likes     Like[]
+}
+
+// جدول الستوريات (القصص اليومية)
+model Story {
+  id        String   @id @default(uuid())
+  mediaUrl  String
+  createdAt DateTime @default(now())
+  expiresAt DateTime // وقت الانتهاء بعد 24 ساعة
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// جدول التعليقات
+model Comment {
+  id        String   @id @default(uuid())
+  text      String
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+}
+
+// جدول الإعجابات (اللايكات)
+model Like {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId]) // يمنع إعطاء لايكين من نفس الشخص لنفس المنشور
+}
+
+// جدول الرسائل (الدردشة)
+model Message {
+  id         String   @id @default(uuid())
+  text       String?
+  mediaUrl   String?
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  senderId   String
+  sender     User     @relation("Sender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  receiverId String
+  receiver   User     @relation("Receiver", fields: [receiverId], references: [id], onDelete: Cascade)
+}
+
+// جدول الإشعارات
+model Notification {
+  id        String   @id @default(uuid())
+  type      String   // نوع الإشعار: LIKE, COMMENT, FOLLOW
+  content   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
