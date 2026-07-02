@@ -34,7 +34,9 @@ const titles: Record<TabKey, string> = {
 
 function AppShellContent() {
   const [active, setActive] = useState<TabKey>("home")
-  const { data: session, status } = useSession()
+  const sessionData = useSession();
+  const session = sessionData?.data;
+  const status = sessionData?.status;
   const loadingAuth = status === "loading"
   const user = session?.user || null
   const [isSingleChatOpen, setIsSingleChatOpen] = useState(false)
