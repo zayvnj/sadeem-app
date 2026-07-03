@@ -14,6 +14,7 @@ import { LikesSheet } from "./likes-sheet"
 import { CommentsSheet } from "./comments-sheet"
 import { PostOptionsSheet } from "./post-options-sheet"
 import { useInfiniteQuery, useQuery, useQueryClient, useMutation } from "@tanstack/react-query"
+import { VerifiedBadge } from "./verified-badge"
 import { useInView } from "react-intersection-observer"
 
 const container = {
@@ -434,7 +435,7 @@ export function HomeFeed() {
                   <div className="flex flex-col">
                     <span className="font-bold text-[15px] leading-none group-hover:underline flex items-center gap-1">
                       {user?.full_name || user?.username}
-                      {user?.is_verified && <BadgeCheck className="size-4 text-blue-500" />}
+                      {user?.isVerified && <VerifiedBadge />}
                     </span>
                     <span className="text-xs text-muted-foreground mt-1 font-medium">@{user?.username}</span>
                   </div>

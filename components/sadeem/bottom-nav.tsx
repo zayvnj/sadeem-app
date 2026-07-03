@@ -1,12 +1,13 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { Home, Clapperboard, Sparkles, MessageCircle, User } from "lucide-react"
+import { Home, Clapperboard, Sparkles, MessageCircle, User, Search } from "lucide-react"
 import type { TabKey } from "./types"
 import { AstronautMascot } from "./AstronautMascot"
 
 const tabs: { key: TabKey; label: string; icon: typeof Home }[] = [
   { key: "home", label: "الرئيسية", icon: Home },
+  { key: "search", label: "البحث", icon: Search },
   { key: "reels", label: "ريلز", icon: Clapperboard },
   { key: "aiAssistant", label: "المساعد", icon: Sparkles },
   { key: "chat", label: "المحادثات", icon: MessageCircle },

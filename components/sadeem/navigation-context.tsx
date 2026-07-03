@@ -1,6 +1,7 @@
 "use client"
 
 import React, { createContext, useContext, useState, ReactNode } from "react"
+import { useSession } from "next-auth/react"
 
 interface NavigationContextType {
   selectedUserId: string | null
@@ -14,9 +15,19 @@ interface NavigationContextType {
 const NavigationContext = createContext<NavigationContextType | undefined>(undefined)
 
 export function NavigationProvider({ children }: { children: ReactNode }) {
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
+  const [selectedUserId, setSelectedUserIdState] = useState<string | null>(null)
   const [storyViewerData, setStoryViewerData] = useState<{ stories: any[]; initialIndex: number } | null>(null)
   const [showStoryUpload, setShowStoryUpload] = useState<boolean>(false)
+  const { data: session } = useSession()
+
+  const setSelectedUserId = (id: string | null) => {
+    if (id && session?.user?.id === id) {
+      window.dispatchEvent(new CustomEvent('switch-tab', { detail: 'profile' }))
+      setSelectedUserIdState(null)
+    } else {
+      setSelectedUserIdState(id)
+    }
+  }
 
   return (
     <NavigationContext.Provider value={{

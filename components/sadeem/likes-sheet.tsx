@@ -9,6 +9,7 @@ import { FollowButton } from "./follow-button"
 import { useSession } from "next-auth/react"
 import { useNavigation } from "./navigation-context"
 import { useInView } from "react-intersection-observer"
+import { VerifiedBadge } from "./verified-badge"
 
 interface LikesSheetProps {
   postId: string | null
@@ -83,7 +84,10 @@ export function LikesSheet({ postId, isOpen, onClose }: LikesSheetProps) {
                       <AvatarFallback>{user.fullName?.[0] || user.username?.[0]}</AvatarFallback>
                     </Avatar>
                     <div className="flex flex-col">
-                      <span className="font-bold text-sm leading-tight">{user.username}</span>
+                      <span className="font-bold text-sm leading-tight flex items-center gap-1">
+                        {user.username}
+                        {user.isVerified && <VerifiedBadge />}
+                      </span>
                       {user.fullName && (
                         <span className="text-xs text-muted-foreground">{user.fullName}</span>
                       )}
