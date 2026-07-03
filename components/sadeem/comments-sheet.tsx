@@ -21,7 +21,7 @@ interface CommentsSheetProps {
 
 export function CommentsSheet({ postId, postOwnerId, isOpen, onClose }: CommentsSheetProps) {
   const { data: session } = useSession()
-  const { navigateToProfile } = useNavigation()
+  const { setSelectedUserId } = useNavigation()
   const { ref, inView } = useInView()
   const queryClient = useQueryClient()
   const [newComment, setNewComment] = useState("")
@@ -124,7 +124,7 @@ export function CommentsSheet({ postId, postOwnerId, isOpen, onClose }: Comments
                     className="size-10 border border-border cursor-pointer shrink-0"
                     onClick={() => {
                       onClose()
-                      navigateToProfile(comment.user.id)
+                      setSelectedUserId(comment.user.id)
                     }}
                   >
                     <AvatarImage src={comment.user.avatarUrl || ''} />
@@ -137,7 +137,7 @@ export function CommentsSheet({ postId, postOwnerId, isOpen, onClose }: Comments
                           className="font-bold text-sm cursor-pointer"
                           onClick={() => {
                             onClose()
-                            navigateToProfile(comment.user.id)
+                            setSelectedUserId(comment.user.id)
                           }}
                         >
                           {comment.user.username}
