@@ -182,14 +182,19 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
 
       <div className="flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pb-20">
         <div className="flex items-center gap-5 px-4 py-6">
-          <div className="rounded-full p-[3px] ring-2 ring-border shrink-0">
-            <div className="flex size-20 items-center justify-center rounded-full bg-secondary text-2xl font-bold text-foreground overflow-hidden">
-              {profile.avatarUrl || profile.avatar_url ? (
-                <img src={profile.avatarUrl || profile.avatar_url} alt="" className="size-full object-cover" />
-              ) : (
-                (profile.fullName || profile.full_name || "م").charAt(0)
-              )}
+          <div className="relative">
+            <div className="rounded-full p-[3px] ring-2 ring-border shrink-0">
+              <div className="flex size-20 items-center justify-center rounded-full bg-secondary text-2xl font-bold text-foreground overflow-hidden">
+                {profile.avatarUrl || profile.avatar_url ? (
+                  <img src={profile.avatarUrl || profile.avatar_url} alt="" className="size-full object-cover" />
+                ) : (
+                  (profile.fullName || profile.full_name || "م").charAt(0)
+                )}
+              </div>
             </div>
+            {profile.lastActive && new Date().getTime() - new Date(profile.lastActive).getTime() < 5 * 60 * 1000 && (
+              <div className="absolute bottom-1 left-1 size-4 rounded-full bg-green-500 border-2 border-background" />
+            )}
           </div>
           <div className="flex flex-1 justify-around">
             {stats.map((s) => (

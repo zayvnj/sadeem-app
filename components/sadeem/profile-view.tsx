@@ -273,7 +273,7 @@ export function ProfileView() {
       <div className="flex items-center justify-between px-4 py-3 sticky top-0 bg-background/80 backdrop-blur-md z-10 border-b border-border">
         <span className="font-bold text-lg flex items-center gap-1">
           {username}
-          {profile?.is_verified && <BadgeCheck className="size-4 text-blue-500" />}
+          {profile?.isVerified && <BadgeCheck className="size-4 text-blue-500" />}
         </span>
 
         <Sheet>

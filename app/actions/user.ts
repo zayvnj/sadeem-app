@@ -24,10 +24,36 @@ export async function searchUsers(query: string) {
       take: 20
     });
 
-    return { success: true, data: users };
+    // Make sure we return plain objects without any potentially non-serializable properties
+    const serializedUsers = users.map(user => ({
+      id: user.id,
+      username: user.username,
+      fullName: user.fullName,
+      avatarUrl: user.avatarUrl,
+      isVerified: user.isVerified
+    }));
+
+    return { success: true, data: serializedUsers };
   } catch (error) {
     console.error('Error searching users:', error);
     return { success: false, error: 'Failed to search users' };
+  }
+}
+
+export async function updateLastActive() {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) return { success: false, error: 'Unauthorized' };
+
+    await prisma.user.update({
+      where: { id: session.user.id },
+      data: { lastActive: new Date() }
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating last active:', error);
+    return { success: false, error: 'Failed to update last active' };
   }
 }
 
@@ -42,6 +68,7 @@ export async function getUserProfile(userId: string) {
         avatarUrl: true,
         bio: true,
         isVerified: true,
+        lastActive: true,
         _count: {
           select: { followers: true, following: true }
         }

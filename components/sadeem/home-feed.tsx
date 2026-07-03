@@ -16,6 +16,8 @@ import { PostOptionsSheet } from "./post-options-sheet"
 import { useInfiniteQuery, useQuery, useQueryClient, useMutation } from "@tanstack/react-query"
 import { VerifiedBadge } from "./verified-badge"
 import { useInView } from "react-intersection-observer"
+import { toast } from "sonner"
+import { FullScreenImageViewer } from "./full-screen-image-viewer"
 
 const container = {
   hidden: { opacity: 0 },
@@ -221,15 +223,24 @@ export function HomeFeed() {
     }
   })
 
-  const handleSave = (postId: string) => {
+  const handleSave = (e: React.MouseEvent, postId: string) => {
+    e.stopPropagation()
     if (!currentUser) {
-      alert("يجب تسجيل الدخول للحفظ")
+      toast.error("يجب تسجيل الدخول للحفظ")
       return
     }
     const post = posts.find(p => p.id === postId)
     if (!post) return
 
-    toggleSaveMutation.mutate({ postId, isNowSaved: !post.isSaved, user: currentUser })
+    try {
+      toggleSaveMutation.mutate({ postId, isNowSaved: !post.isSaved, user: currentUser })
+      if (!post.isSaved) {
+        toast.success("تم الحفظ بنجاح")
+      }
+    } catch (error) {
+      console.error("Save error:", error)
+      toast.error("حدث خطأ أثناء الحفظ")
+    }
   }
 
   // Exploding Heart Animation state
@@ -261,18 +272,55 @@ export function HomeFeed() {
   // Options Sheet State
   const [activeOptionsPost, setActiveOptionsPost] = useState<any | null>(null)
 
-  const handleDoubleTap = (postId: string) => {
-    handleLike(postId, true)
+  // Lightbox State
+  const [activeLightboxImage, setActiveLightboxImage] = useState<string | null>(null)
 
-    // Trigger animation
-    setExplodingPostId(postId)
-    setTimeout(() => {
-      setExplodingPostId(null)
-    }, 800)
+  // Debounce click handler state
+  const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  const handleImageTap = (postId: string, mediaUrl: string) => {
+    if (clickTimeoutRef.current) {
+      // Double tap detected
+      clearTimeout(clickTimeoutRef.current)
+      clickTimeoutRef.current = null
+
+      handleLike(postId, true)
+      setExplodingPostId(postId)
+      setTimeout(() => {
+        setExplodingPostId(null)
+      }, 800)
+    } else {
+      // First tap detected, wait to see if it's a double tap
+      clickTimeoutRef.current = setTimeout(() => {
+        clickTimeoutRef.current = null
+        // Single tap action
+        setActiveLightboxImage(mediaUrl)
+      }, 300) // 300ms delay for double tap detection
+    }
+  }
+
+  // Pull to refresh
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [dragY, setDragY] = useState(0)
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['feed', 'posts'] }),
+      queryClient.invalidateQueries({ queryKey: ['feed', 'stories'] }),
+      queryClient.invalidateQueries({ queryKey: ['feed', 'reels'] })
+    ])
+    setIsRefreshing(false)
+    setDragY(0)
   }
 
   return (
-    <div className="pb-4">
+    <div className="pb-4 h-full relative overflow-hidden flex flex-col">
+      <FullScreenImageViewer
+        imageUrl={activeLightboxImage}
+        onClose={() => setActiveLightboxImage(null)}
+      />
+
       {/* Story Viewer Overlay */}
       <AnimatePresence>
         {storyViewerData && (
@@ -308,7 +356,43 @@ export function HomeFeed() {
         )}
       </AnimatePresence>
 
+      {/* Pull to refresh indicator */}
+      <motion.div
+        className="absolute top-0 left-0 right-0 flex justify-center z-10 pointer-events-none"
+        animate={{ y: isRefreshing ? 20 : Math.max(0, dragY - 40) }}
+        initial={{ y: -40 }}
+      >
+        <div className="bg-background shadow-md rounded-full p-2 mt-4">
+          <Loader2 className={`size-6 text-primary ${isRefreshing ? 'animate-spin' : ''}`} style={{ transform: `rotate(${dragY * 2}deg)` }} />
+        </div>
+      </motion.div>
+
       {/* Main Feed Content */}
+      <motion.div
+        className="flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        drag="y"
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={0.2}
+        onDrag={(e, info) => {
+          // Only allow dragging down when at the top of the scroll container
+          const target = e.target as HTMLElement;
+          const scrollContainer = target.closest('.overflow-y-auto');
+
+          if (scrollContainer && scrollContainer.scrollTop === 0 && info.offset.y > 0) {
+             setDragY(info.offset.y)
+          } else {
+             setDragY(0)
+          }
+        }}
+        onDragEnd={(e, info) => {
+          if (dragY > 100 && !isRefreshing) {
+            handleRefresh()
+          } else {
+            setDragY(0)
+          }
+        }}
+        animate={{ y: isRefreshing ? 60 : 0 }}
+      >
       <div className="px-4 py-6">
         <h1 className="text-[28px] font-black tracking-tight flex flex-col leading-none">
           <span className="text-foreground">مرحباً بعودتك</span>
@@ -457,7 +541,7 @@ export function HomeFeed() {
               {post.media_url && (
                 <div
                   className="relative aspect-square w-full sm:rounded-3xl overflow-hidden bg-secondary border-y sm:border border-border cursor-pointer select-none"
-                  onDoubleClick={() => handleDoubleTap(post.id)}
+                  onClick={() => handleImageTap(post.id, post.media_url)}
                 >
                   <AnimatePresence>
                     {explodingPostId === post.id && (
@@ -528,7 +612,7 @@ export function HomeFeed() {
                   whileTap={{ scale: 0.8 }}
                   className={`mr-auto text-foreground ${post.isSaved ? 'fill-foreground' : ''}`}
                   aria-label="حفظ"
-                  onClick={() => handleSave(post.id)}
+                  onClick={(e: React.MouseEvent) => handleSave(e, post.id)}
                 >
                   <motion.div animate={post.isSaved ? { scale: [1, 1.2, 1] } : { scale: 1 }} transition={{ type: 'spring', stiffness: 300, damping: 15 }}>
                     <Bookmark className={`size-5 ${post.isSaved ? 'fill-foreground' : ''}`} />
@@ -587,6 +671,7 @@ export function HomeFeed() {
         isOpen={!!activeOptionsPost}
         onClose={() => setActiveOptionsPost(null)}
       />
+      </motion.div>
     </div>
   )
 }

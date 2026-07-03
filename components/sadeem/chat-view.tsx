@@ -267,7 +267,7 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps) {
                     {activeChat.user?.fullName || activeChat.user?.username}
                     {activeChat.user?.isVerified && <BadgeCheck className="size-4 text-blue-500" />}
                   </span>
-                  {activeChat.user?.isOnline && (
+                  {(activeChat.user?.isOnline || (activeChat.user?.lastActive && new Date().getTime() - new Date(activeChat.user.lastActive).getTime() < 5 * 60 * 1000)) && (
                     <span className="text-xs text-green-500 flex items-center gap-1">
                       <span className="relative flex size-2">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
@@ -518,7 +518,7 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps) {
                     {(chat.user?.fullName || chat.user?.username || "م").charAt(0)}
                   </div>
                 )}
-                {chat.user?.isOnline && (
+                {(chat.user?.isOnline || (chat.user?.lastActive && new Date().getTime() - new Date(chat.user.lastActive).getTime() < 5 * 60 * 1000)) && (
                   <span className="absolute bottom-0.5 right-0.5 size-3.5 rounded-full bg-green-500 border-2 border-background ring-1 ring-green-500/20" />
                 )}
               </div>
