@@ -158,3 +158,50 @@ export async function getUserPosts(userId: string) {
     return { success: false, error: 'Failed to fetch user posts' };
   }
 }
+
+export async function getSavedPosts(cursor?: string) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) return { success: false, error: 'Unauthorized' };
+
+    const userId = session.user.id;
+    const limit = 20;
+
+    const savedPosts = await prisma.savedPost.findMany({
+      where: { userId },
+      include: {
+        post: {
+          include: {
+            user: { select: { id: true, username: true, avatarUrl: true, fullName: true } },
+            _count: { select: { likes: true, comments: true } },
+            likes: { where: { userId } },
+            savedBy: { where: { userId } }
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit + 1,
+      // SavedPost has an Int id, so cursor should be Int if we use it properly,
+      // but let's just do skip for simple pagination or assume we pass Int cursor.
+      // Assuming we'll pass cursor as the stringified Int ID or use standard offset for now.
+    });
+
+    // Fallback simple implementation without cursor for SavedPosts initially
+    // Since cursor type differs
+
+    return {
+      success: true,
+      data: savedPosts.map(sp => ({
+        ...sp.post,
+        isLiked: sp.post.likes.length > 0,
+        isSaved: sp.post.savedBy.length > 0,
+        likesCount: sp.post._count.likes,
+        commentsCount: sp.post._count.comments,
+        media_url: sp.post.mediaUrl
+      }))
+    };
+  } catch (error) {
+    console.error('Error fetching saved posts:', error);
+    return { success: false, error: 'Failed to fetch saved posts' };
+  }
+}

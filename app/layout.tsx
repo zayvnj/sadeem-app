@@ -3,6 +3,7 @@ import { Cairo } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 import { QueryProvider } from '@/lib/query-provider'
+import { SessionProvider } from 'next-auth/react'
 
 const cairo = Cairo({ subsets: ['arabic', 'latin'], variable: '--font-cairo' })
 
@@ -37,9 +38,11 @@ export default function RootLayout({
   return (
     <html lang="ar" dir="rtl" className={`bg-background ${cairo.variable}`}>
       <body className="font-sans antialiased">
-        <QueryProvider>
-          {children}
-        </QueryProvider>
+        <SessionProvider>
+          <QueryProvider>
+            {children}
+          </QueryProvider>
+        </SessionProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

@@ -4,8 +4,12 @@ import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Heart, MessageCircle, Send, Music2, Play, Volume2, VolumeX, Loader2, BadgeCheck, Film } from "lucide-react"
 import { useSession } from "next-auth/react"
-import { getReels, toggleLike } from "@/app/actions/post"
+import { getReels, toggleLike, toggleSave } from "@/app/actions/post"
 import { useNavigation } from "./navigation-context"
+import { LikesSheet } from "./likes-sheet"
+import { CommentsSheet } from "./comments-sheet"
+import { Bookmark, MoreHorizontal } from "lucide-react"
+import { PostOptionsSheet } from "./post-options-sheet"
 
 export function ReelsView() {
   const [reels, setReels] = useState<any[]>([])
@@ -81,9 +85,48 @@ export function ReelsView() {
     }
   }
 
+  const handleSave = async (postId: string) => {
+    try {
+      if (!currentUser) {
+        alert("يجب تسجيل الدخول للحفظ")
+        return
+      }
+
+      const reelIndex = reels.findIndex(r => r.id === postId)
+      if (reelIndex === -1) return
+
+      const reel = reels[reelIndex]
+      const wasSaved = reel.isSaved
+      const isNowSaved = !wasSaved
+
+      setReels(current =>
+        current.map(r => {
+          if (r.id === postId) {
+            return {
+              ...r,
+              isSaved: isNowSaved,
+            }
+          }
+          return r
+        })
+      )
+
+      const res = await toggleSave(postId)
+      if (!res.success) throw new Error(res.error)
+    } catch (error) {
+      console.error(error)
+    }
+  }
+
   // Basic scroll snap logic for reels
   const [activeReelIndex, setActiveReelIndex] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
+
+  // Modals state
+  const [activeLikesPostId, setActiveLikesPostId] = useState<string | null>(null)
+  const [activeCommentsPostId, setActiveCommentsPostId] = useState<string | null>(null)
+  const [activeCommentsPostOwnerId, setActiveCommentsPostOwnerId] = useState<string | null>(null)
+  const [activeOptionsPost, setActiveOptionsPost] = useState<any | null>(null)
 
   const handleScroll = () => {
     if (!containerRef.current) return
@@ -127,14 +170,43 @@ export function ReelsView() {
           reel={reel}
           isActive={index === activeReelIndex}
           onLike={handleLike}
+          onSave={handleSave}
+          onShowLikes={() => setActiveLikesPostId(reel.id)}
+          onShowComments={() => {
+            setActiveCommentsPostId(reel.id)
+            setActiveCommentsPostOwnerId(reel.user_id)
+          }}
+          onShowOptions={() => setActiveOptionsPost(reel)}
           onAvatarClick={(uid) => setSelectedUserId(uid)}
         />
       ))}
+
+      <LikesSheet
+        postId={activeLikesPostId}
+        isOpen={!!activeLikesPostId}
+        onClose={() => setActiveLikesPostId(null)}
+      />
+
+      <CommentsSheet
+        postId={activeCommentsPostId}
+        postOwnerId={activeCommentsPostOwnerId}
+        isOpen={!!activeCommentsPostId}
+        onClose={() => {
+          setActiveCommentsPostId(null)
+          setActiveCommentsPostOwnerId(null)
+        }}
+      />
+
+      <PostOptionsSheet
+        post={activeOptionsPost}
+        isOpen={!!activeOptionsPost}
+        onClose={() => setActiveOptionsPost(null)}
+      />
     </div>
   )
 }
 
-function ReelItem({ reel, isActive, onLike, onAvatarClick }: { reel: any; isActive: boolean; onLike: (id: string, dt?: boolean) => void; onAvatarClick: (uid: string) => void }) {
+function ReelItem({ reel, isActive, onLike, onSave, onShowLikes, onShowComments, onShowOptions, onAvatarClick }: { reel: any; isActive: boolean; onLike: (id: string, dt?: boolean) => void; onSave: (id: string) => void; onShowLikes: () => void; onShowComments: () => void; onShowOptions: () => void; onAvatarClick: (uid: string) => void }) {
   const [isMuted, setIsMuted] = useState(true)
   const [isPlaying, setIsPlaying] = useState(true)
   const [showHeart, setShowHeart] = useState(false)
@@ -253,16 +325,33 @@ function ReelItem({ reel, isActive, onLike, onAvatarClick }: { reel: any; isActi
         <ReelAction
           icon={<Heart className={`size-7 ${reel.isLiked ? 'fill-red-500 text-red-500' : 'text-white'}`} />}
           label={reel.likes_count?.toString() || "0"}
-          onClick={(e) => { e.stopPropagation(); onLike(reel.id); }}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            (window as any)._likesPressTimer = setTimeout(() => {
+              onShowLikes();
+              (window as any)._likesPressTimer = null;
+            }, 500);
+          }}
+          onPointerUp={(e) => {
+            e.stopPropagation();
+            if ((window as any)._likesPressTimer) {
+              clearTimeout((window as any)._likesPressTimer);
+              (window as any)._likesPressTimer = null;
+              onLike(reel.id);
+            }
+          }}
+          onPointerLeave={() => {
+            if ((window as any)._likesPressTimer) {
+              clearTimeout((window as any)._likesPressTimer);
+              (window as any)._likesPressTimer = null;
+            }
+          }}
           animated={reel.isLiked}
         />
         <ReelAction
           icon={<MessageCircle className="size-7 text-white" />}
           label={reel.comments_count?.toString() || "0"}
-          onClick={(e) => {
-             e.stopPropagation()
-             alert("التعليقات غير متوفرة في العرض المبسط")
-          }}
+          onClick={(e) => { e.stopPropagation(); onShowComments(); }}
         />
         <ReelAction
           icon={<Send className="size-7 text-white -ml-1" />}
@@ -273,24 +362,37 @@ function ReelItem({ reel, isActive, onLike, onAvatarClick }: { reel: any; isActi
              alert("تم النسخ للمشاركة");
           }}
         />
+        <ReelAction
+          icon={<Bookmark className={`size-7 ${reel.isSaved ? 'fill-white text-white' : 'text-white'}`} />}
+          onClick={(e) => { e.stopPropagation(); onSave(reel.id); }}
+        />
         <div className="h-px w-6 bg-white/20 my-1" />
         <button
            onClick={(e) => { e.stopPropagation(); setIsMuted(!isMuted) }}
-           className="size-10 rounded-full bg-black/20 backdrop-blur-md border border-white/20 flex items-center justify-center text-white"
+           className="size-10 rounded-full bg-black/20 backdrop-blur-md border border-white/20 flex items-center justify-center text-white mb-2"
         >
           {isMuted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
+        </button>
+        <button
+           onClick={(e) => { e.stopPropagation(); onShowOptions() }}
+           className="size-10 rounded-full bg-black/20 backdrop-blur-md border border-white/20 flex items-center justify-center text-white"
+        >
+          <MoreHorizontal className="size-5" />
         </button>
       </div>
     </div>
   )
 }
 
-function ReelAction({ icon, label, onClick, animated }: { icon: React.ReactNode; label: string; onClick: (e:any) => void; animated?: boolean }) {
+function ReelAction({ icon, label, onClick, onPointerDown, onPointerUp, onPointerLeave, animated }: { icon: React.ReactNode; label?: string; onClick?: (e:any) => void; onPointerDown?: (e:any) => void; onPointerUp?: (e:any) => void; onPointerLeave?: (e:any) => void; animated?: boolean }) {
   return (
     <motion.button
       whileTap={{ scale: 0.8 }}
       onClick={onClick}
-      className="flex flex-col items-center gap-1 drop-shadow-xl"
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
+      onPointerLeave={onPointerLeave}
+      className="flex flex-col items-center gap-1 drop-shadow-xl touch-none"
     >
       <motion.div
         animate={animated ? { scale: [1, 1.2, 1] } : { scale: 1 }}
