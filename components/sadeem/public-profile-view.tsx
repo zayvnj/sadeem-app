@@ -2,13 +2,16 @@
 
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import { ChevronRight, Grid3x3, Film, Loader2, BadgeCheck, Heart } from "lucide-react"
+import { ChevronRight, Grid3x3, Film, Loader2, Heart, ShieldAlert, ShieldCheck } from "lucide-react"
 import { toast } from "sonner"
 import { useSession } from "next-auth/react"
-import { getUserProfile, checkFollowStatus } from "@/app/actions/user"
+import { getUserProfile, checkFollowStatus, toggleVerification } from "@/app/actions/user"
 import { getUserPosts } from "@/app/actions/user"
+import { findOrCreateChat } from "@/app/actions/chat"
 import { useQueryClient } from "@tanstack/react-query"
 import { FollowButton } from "./follow-button"
+import { VerifiedBadge } from "./verified-badge"
+import { useRouter } from "next/navigation"
 
 interface PublicProfileViewProps {
   userId: string
@@ -24,6 +27,8 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
   const [profile, setProfile] = useState<any>(null)
   const [posts, setPosts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [messageLoading, setMessageLoading] = useState(false)
+  const router = useRouter()
   const [isFollowing, setIsFollowing] = useState(false)
   const [followersCount, setFollowersCount] = useState(0)
   const [followingCount, setFollowingCount] = useState(0)
@@ -102,6 +107,21 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
   const username = profile.username || "مستخدم"
   const fullName = profile.fullName || profile.full_name || "مستخدم سديم"
   const bio = profile.bio || ""
+  const isVerified = profile.isVerified || profile.is_verified || false
+
+  const handleToggleVerification = async () => {
+    try {
+      const res = await toggleVerification(userId)
+      if (res.success) {
+        setProfile((prev: any) => ({ ...prev, isVerified: res.data?.isVerified }))
+        toast.success(res.data?.isVerified ? "تم توثيق الحساب" : "تم إلغاء التوثيق")
+      } else {
+        toast.error(res.error || "حدث خطأ")
+      }
+    } catch (error) {
+      toast.error("حدث خطأ")
+    }
+  }
 
   const stats = [
     { label: "منشور", value: posts.length.toString() },
@@ -110,6 +130,26 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
   ]
 
   const isOwnProfile = currentUser?.id === userId
+
+  const handleMessageClick = async () => {
+    if (!currentUser) return
+    setMessageLoading(true)
+    try {
+      const res = await findOrCreateChat(userId)
+      if (res.success && res.data) {
+        // Go to chat tab and explicitly open this chat
+        router.push(`?chatId=${res.data.chatId}`)
+        window.dispatchEvent(new CustomEvent('switch-tab', { detail: 'chat' }))
+        onBack() // Close public profile overlay
+      } else {
+        toast.error("حدث خطأ أثناء محاولة بدء المحادثة")
+      }
+    } catch (error) {
+      toast.error("حدث خطأ")
+    } finally {
+      setMessageLoading(false)
+    }
+  }
 
   return (
     <motion.div
@@ -126,9 +166,18 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
           </button>
           <span className="font-bold flex items-center gap-1">
             {username}
-            {profile.is_verified && <BadgeCheck className="size-4 text-blue-500" />}
+            {isVerified && <VerifiedBadge />}
           </span>
         </div>
+        {(currentUser as any)?.role === 'ADMIN' && (
+          <button
+            onClick={handleToggleVerification}
+            className="p-2 -ml-2 rounded-full hover:bg-secondary transition-colors"
+            title={isVerified ? "إلغاء التوثيق" : "توثيق الحساب"}
+          >
+            {isVerified ? <ShieldAlert className="size-5 text-red-500" /> : <ShieldCheck className="size-5 text-blue-500" />}
+          </button>
+        )}
       </header>
 
       <div className="flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pb-20">
@@ -167,8 +216,12 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
                 setFollowersCount(prev => following ? prev + 1 : Math.max(0, prev - 1))
               }}
             />
-            <button className="flex-1 rounded-xl bg-secondary py-2.5 text-sm font-bold text-foreground hover:bg-secondary/80 transition-colors">
-              مراسلة
+            <button
+              onClick={handleMessageClick}
+              disabled={messageLoading}
+              className="flex-1 rounded-xl bg-secondary py-2.5 text-sm font-bold text-foreground hover:bg-secondary/80 transition-colors flex items-center justify-center disabled:opacity-50"
+            >
+              {messageLoading ? <Loader2 className="size-4 animate-spin" /> : "مراسلة"}
             </button>
           </div>
         )}

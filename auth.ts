@@ -43,6 +43,21 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
+    async signIn({ user }) {
+      const adminEmails = ["sly86055r@gmail.com", "zainalabdeensalman123@gmail.com"];
+      if (user.email && adminEmails.includes(user.email)) {
+        // Upgrade user to ADMIN role if they exist, or rely on events for creation
+        try {
+          await prisma.user.update({
+            where: { email: user.email },
+            data: { role: "ADMIN" }
+          });
+        } catch (error) {
+          // Ignore P2025 or user not found, they might be signing in for the first time
+        }
+      }
+      return true;
+    },
     async jwt({ token, user }) {
       if (user) {
         token.sub = user.id;
@@ -56,12 +71,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         // Map the default 'name' and 'image' to Sadeem's fields if needed
         const dbUser = await prisma.user.findUnique({
           where: { id: token.sub as string },
-          select: { username: true, fullName: true, avatarUrl: true }
+          select: { username: true, fullName: true, avatarUrl: true, role: true, isVerified: true }
         });
         if (dbUser) {
            (session.user as any).username = dbUser.username;
            (session.user as any).fullName = dbUser.fullName;
            (session.user as any).avatarUrl = dbUser.avatarUrl || session.user.image;
+           (session.user as any).role = dbUser.role;
+           (session.user as any).isVerified = dbUser.isVerified;
         }
       }
       return session;
@@ -70,15 +87,23 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   // Ensure that new users automatically get a username
   events: {
     async createUser({ user }) {
+      const updateData: any = {};
+      const adminEmails = ["sly86055r@gmail.com", "zainalabdeensalman123@gmail.com"];
+      if (user.email && adminEmails.includes(user.email)) {
+        updateData.role = "ADMIN";
+      }
+
       if (user.email && !user.name) {
         const generatedUsername = user.email.split('@')[0] + Math.floor(Math.random() * 1000);
+        updateData.username = generatedUsername;
+        updateData.fullName = user.name || generatedUsername;
+        updateData.avatarUrl = user.image;
+      }
+
+      if (Object.keys(updateData).length > 0) {
         await prisma.user.update({
           where: { id: user.id },
-          data: {
-            username: generatedUsername,
-            fullName: user.name || generatedUsername,
-            avatarUrl: user.image
-          }
+          data: updateData
         });
       }
     }

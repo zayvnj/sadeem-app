@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Loader2, Trash2, UserMinus, Flag, AlertCircle } from "lucide-react"
 import { deletePost } from "@/app/actions/post"
 import { toggleFollow } from "@/app/actions/user"
-import { Sheet, SheetContent } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { useSession } from "next-auth/react"
 import { toast } from "sonner"
 
@@ -77,6 +77,9 @@ export function PostOptionsSheet({ post, isOpen, onClose }: PostOptionsSheetProp
   return (
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <SheetContent side="bottom" className="rounded-t-3xl bg-background/95 backdrop-blur-xl border-t border-border flex flex-col p-4 pb-safe gap-2">
+        <SheetHeader className="sr-only">
+          <SheetTitle>خيارات المنشور</SheetTitle>
+        </SheetHeader>
         <div className="w-12 h-1.5 bg-muted rounded-full mx-auto mb-4" />
 
         {isOwner ? (

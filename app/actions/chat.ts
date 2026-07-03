@@ -3,6 +3,43 @@
 import prisma from '@/lib/prisma';
 import { auth } from '@/auth';
 
+export async function findOrCreateChat(otherUserId: string) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) return { success: false, error: 'Unauthorized' };
+
+    const userId = session.user.id;
+
+    // Look for existing chat between these two users
+    const existingChat = await prisma.chat.findFirst({
+      where: {
+        AND: [
+          { participants: { some: { id: userId } } },
+          { participants: { some: { id: otherUserId } } }
+        ]
+      }
+    });
+
+    if (existingChat) {
+      return { success: true, data: { chatId: existingChat.id } };
+    }
+
+    // Create new chat
+    const newChat = await prisma.chat.create({
+      data: {
+        participants: {
+          connect: [{ id: userId }, { id: otherUserId }]
+        }
+      }
+    });
+
+    return { success: true, data: { chatId: newChat.id } };
+  } catch (error) {
+    console.error('Error finding or creating chat:', error);
+    return { success: false, error: 'Failed to initiate chat' };
+  }
+}
+
 export async function getChats() {
   try {
     const session = await auth();
@@ -10,40 +47,42 @@ export async function getChats() {
 
     const userId = session.user.id;
 
-    // Get all messages where the user is sender or receiver
-    const messages = await prisma.message.findMany({
+    const chats = await prisma.chat.findMany({
       where: {
-        OR: [
-          { senderId: userId },
-          { receiverId: userId }
-        ]
+        participants: { some: { id: userId } }
       },
       include: {
-        sender: { select: { id: true, username: true, avatarUrl: true, fullName: true, isOnline: true } },
-        receiver: { select: { id: true, username: true, avatarUrl: true, fullName: true, isOnline: true } }
+        participants: {
+          where: { id: { not: userId } },
+          select: { id: true, username: true, avatarUrl: true, fullName: true, isOnline: true }
+        },
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 1
+        },
+        _count: {
+          select: {
+            messages: {
+              where: {
+                isRead: false,
+                senderId: { not: userId }
+              }
+            }
+          }
+        }
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { updatedAt: 'desc' }
     });
 
-    // Group by conversation
-    const conversationsMap = new Map();
-
-    messages.forEach(msg => {
-      const otherUser = msg.senderId === userId ? msg.receiver : msg.sender;
-      if (!conversationsMap.has(otherUser.id)) {
-        conversationsMap.set(otherUser.id, {
-          id: otherUser.id, // Using other user's ID as conversation ID for simplicity
-          user: otherUser,
-          lastMessage: msg,
-          unreadCount: (msg.receiverId === userId && !msg.isRead) ? 1 : 0
-        });
-      } else if (msg.receiverId === userId && !msg.isRead) {
-         const conv = conversationsMap.get(otherUser.id);
-         conv.unreadCount += 1;
-      }
+    const result = chats.map(chat => {
+      const otherUser = chat.participants[0];
+      return {
+        id: chat.id,
+        user: otherUser,
+        lastMessage: chat.messages[0] || null,
+        unreadCount: chat._count.messages
+      };
     });
-
-    const result = Array.from(conversationsMap.values());
 
     return { success: true, data: result };
   } catch (error) {
@@ -52,26 +91,31 @@ export async function getChats() {
   }
 }
 
-export async function getMessages(otherUserId: string) {
+export async function getMessages(chatId: string) {
   try {
     const session = await auth();
     if (!session?.user?.id) return { success: false, error: 'Unauthorized' };
 
     const userId = session.user.id;
 
-    const messages = await prisma.message.findMany({
+    // Verify user is part of chat
+    const chat = await prisma.chat.findFirst({
       where: {
-        OR: [
-          { senderId: userId, receiverId: otherUserId },
-          { senderId: otherUserId, receiverId: userId }
-        ]
-      },
+        id: chatId,
+        participants: { some: { id: userId } }
+      }
+    });
+
+    if (!chat) return { success: false, error: 'Chat not found' };
+
+    const messages = await prisma.message.findMany({
+      where: { chat_id: chatId },
       orderBy: { createdAt: 'asc' }
     });
 
     // Mark received messages as read
     const unreadIds = messages
-      .filter(m => m.receiverId === userId && !m.isRead)
+      .filter(m => m.senderId !== userId && !m.isRead)
       .map(m => m.id);
 
     if (unreadIds.length > 0) {
@@ -88,7 +132,7 @@ export async function getMessages(otherUserId: string) {
   }
 }
 
-export async function sendMessage(receiverId: string, text?: string, mediaUrl?: string) {
+export async function sendMessage(chatId: string, text?: string, mediaUrl?: string) {
   try {
     const session = await auth();
     if (!session?.user?.id) return { success: false, error: 'Unauthorized' };
@@ -102,8 +146,14 @@ export async function sendMessage(receiverId: string, text?: string, mediaUrl?: 
         text,
         mediaUrl,
         senderId: session.user.id,
-        receiverId
+        chat_id: chatId
       }
+    });
+
+    // Update chat updatedAt
+    await prisma.chat.update({
+      where: { id: chatId },
+      data: { updatedAt: new Date() }
     });
 
     return { success: true, data: newMessage };

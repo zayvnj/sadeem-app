@@ -92,7 +92,7 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps) {
           ...chat,
           user: {
             ...chat.user,
-            full_name: chat.user.fullName
+            fullName: chat.user.fullName
           },
           lastMessage: chat.lastMessage?.text ? cleanMessagePreview(chat.lastMessage.text) : (chat.lastMessage?.mediaUrl ? 'صورة' : 'لا توجد رسائل'),
           lastMessageTime: chat.lastMessage?.createdAt,
@@ -199,7 +199,7 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps) {
     e.preventDefault()
     if (!newMessage.trim() || !activeChat || !currentUser) return
 
-    const senderNameRaw = replyingTo?.sender_id === currentUser?.id ? 'أنت' : (activeChat.user?.full_name || activeChat.user?.username || 'مستخدم')
+    const senderNameRaw = replyingTo?.sender_id === currentUser?.id ? 'أنت' : (activeChat.user?.fullName || activeChat.user?.username || 'مستخدم')
     const senderName = senderNameRaw.replace(/\|/g, '')
     const quotedText = replyingTo ? replyingTo.content.replace(/\[REPLY\|.*?\]\s*/, '').substring(0, 50).replace(/\|/g, '') + '...' : ''
     const replyContent = replyingTo ? `[REPLY|${replyingTo.id}|${senderName}|${quotedText}] ${newMessage}` : newMessage
@@ -255,19 +255,19 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps) {
                   /* Navigate to user profile */
                 }}
               >
-                {activeChat.user?.avatar_url ? (
-                  <img src={activeChat.user.avatar_url} alt="" className="size-10 rounded-full object-cover shadow-sm" />
+                {activeChat.user?.avatarUrl ? (
+                  <img src={activeChat.user.avatarUrl} alt="" className="size-10 rounded-full object-cover shadow-sm" />
                 ) : (
                   <div className="flex size-10 items-center justify-center rounded-full bg-secondary font-bold text-foreground shadow-sm">
-                    {(activeChat.user?.full_name || activeChat.user?.username || "م").charAt(0)}
+                    {(activeChat.user?.fullName || activeChat.user?.username || "م").charAt(0)}
                   </div>
                 )}
                 <div className="flex flex-col">
                   <span className="font-bold flex items-center gap-1">
-                    {activeChat.user?.full_name || activeChat.user?.username}
-                    {activeChat.user?.is_verified && <BadgeCheck className="size-4 text-blue-500" />}
+                    {activeChat.user?.fullName || activeChat.user?.username}
+                    {activeChat.user?.isVerified && <BadgeCheck className="size-4 text-blue-500" />}
                   </span>
-                  {activeChat.user?.is_online && (
+                  {activeChat.user?.isOnline && (
                     <span className="text-xs text-green-500 flex items-center gap-1">
                       <span className="relative flex size-2">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
@@ -290,7 +290,7 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps) {
                   <div className="size-20 rounded-full bg-secondary flex items-center justify-center mb-4">
                     <Send className="size-8 opacity-50" />
                   </div>
-                  <p>ابدأ المحادثة مع {activeChat.user?.full_name || activeChat.user?.username}</p>
+                  <p>ابدأ المحادثة مع {activeChat.user?.fullName || activeChat.user?.username}</p>
                 </div>
               ) : (
                 messages.map((msg: any) => {
@@ -421,7 +421,7 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps) {
                     <div className="flex flex-col overflow-hidden min-w-0 pr-2">
                       <span className="text-xs font-bold flex items-center gap-1 mb-1">
                         <Reply className="size-3 text-foreground" />
-                        الرد على {replyingTo.sender_id === currentUser?.id ? 'نفسك' : (activeChat.user?.full_name || activeChat.user?.username)}
+                        الرد على {replyingTo.sender_id === currentUser?.id ? 'نفسك' : (activeChat.user?.fullName || activeChat.user?.username)}
                       </span>
                       <span className="text-sm text-muted-foreground truncate w-[250px] sm:w-[350px]">
                         {replyingTo.content.replace(/\[REPLY\|.*?\]\s*/, '')}
@@ -476,17 +476,17 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps) {
                 onClick={() => handleUserSelect(user)}
                 className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-right hover:bg-secondary transition-colors"
               >
-                {user.avatar_url ? (
-                  <img src={user.avatar_url} alt="" className="size-10 rounded-full object-cover" />
+                {user.avatarUrl ? (
+                  <img src={user.avatarUrl} alt="" className="size-10 rounded-full object-cover" />
                 ) : (
                   <div className="flex size-10 items-center justify-center rounded-full bg-muted font-bold text-muted-foreground">
-                    {(user.full_name || user.username || "م").charAt(0)}
+                    {(user.fullName || user.username || "م").charAt(0)}
                   </div>
                 )}
                 <div className="flex flex-col">
                   <span className="text-sm font-semibold flex items-center gap-1">
-                    {user.full_name || user.username}
-                    {user.is_verified && <BadgeCheck className="size-4 text-blue-500" />}
+                    {user.fullName || user.username}
+                    {user.isVerified && <BadgeCheck className="size-4 text-blue-500" />}
                   </span>
                   <span className="text-xs text-muted-foreground">@{user.username}</span>
                 </div>
@@ -511,22 +511,22 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps) {
               className="flex items-center gap-3 rounded-2xl p-3 text-right hover:bg-secondary/60 transition-colors relative"
             >
               <div className="relative shrink-0">
-                {chat.user?.avatar_url ? (
-                  <img src={chat.user.avatar_url} alt="" className="size-14 rounded-full object-cover shadow-sm border border-border/50" />
+                {chat.user?.avatarUrl ? (
+                  <img src={chat.user.avatarUrl} alt="" className="size-14 rounded-full object-cover shadow-sm border border-border/50" />
                 ) : (
                   <div className="flex size-14 items-center justify-center rounded-full bg-secondary font-bold text-foreground shadow-sm border border-border/50 text-xl">
-                    {(chat.user?.full_name || chat.user?.username || "م").charAt(0)}
+                    {(chat.user?.fullName || chat.user?.username || "م").charAt(0)}
                   </div>
                 )}
-                {chat.user?.is_online && (
+                {chat.user?.isOnline && (
                   <span className="absolute bottom-0.5 right-0.5 size-3.5 rounded-full bg-green-500 border-2 border-background ring-1 ring-green-500/20" />
                 )}
               </div>
               <div className="flex flex-1 flex-col overflow-hidden min-w-0 pr-1">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-[15px] truncate flex items-center gap-1">
-                    {chat.user?.full_name || chat.user?.username}
-                    {chat.user?.is_verified && <BadgeCheck className="size-4 text-blue-500 shrink-0" />}
+                    {chat.user?.fullName || chat.user?.username}
+                    {chat.user?.isVerified && <BadgeCheck className="size-4 text-blue-500 shrink-0" />}
                   </span>
                   <span className="text-[11px] text-muted-foreground shrink-0 font-medium opacity-80 whitespace-nowrap">
                     {chat.lastMessageTime && new Date(chat.lastMessageTime).toLocaleDateString('ar-SA', { month: 'short', day: 'numeric' })}

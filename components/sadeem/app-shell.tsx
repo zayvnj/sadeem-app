@@ -17,6 +17,7 @@ import { PublicProfileView } from "./public-profile-view"
 import { AuthView } from "./auth-view"
 import { NotificationsView } from "./notifications-view"
 import { AIAssistantView } from "./ai-assistant-view"
+import { SearchView } from "./search-view"
 import { NavigationProvider, useNavigation } from "./navigation-context"
 import { Logo } from "./logo"
 import { GlobalLoadingScreen } from "./global-loading"
@@ -30,6 +31,7 @@ const titles: Record<TabKey, string> = {
   profile: "الملف الشخصي",
   notifications: "الإشعارات",
   aiAssistant: "المساعد الذكي",
+  search: "البحث",
 }
 
 function AppShellContent() {
@@ -177,6 +179,7 @@ function AppShellContent() {
               {active === "profile" && <ProfileView />}
               {active === "notifications" && <NotificationsView />}
               {active === "aiAssistant" && <AIAssistantView />}
+              {active === "search" && <SearchView />}
             </motion.div>
           </AnimatePresence>
 

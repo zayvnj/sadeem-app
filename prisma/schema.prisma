@@ -13,16 +13,18 @@ datasource db {
 
 // جدول المستخدمين
 model User {
-  id        String   @id @default(uuid())
-  username  String   @unique
-  email     String   @unique
-  password  String?
-  fullName  String?
-  bio       String?
-  avatarUrl String?
-  isOnline  Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(uuid())
+  username   String   @unique
+  email      String   @unique
+  password   String?
+  fullName   String?
+  bio        String?
+  avatarUrl  String?
+  isOnline   Boolean  @default(false)
+  role       String   @default("USER")
+  isVerified Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   // العلاقات
   posts         Post[]
@@ -31,7 +33,9 @@ model User {
   likes         Like[]
   savedPosts    SavedPost[]
   messagesSent  Message[] @relation("Sender")
-  messagesRecv  Message[] @relation("Receiver")
+
+  // المحادثات
+  chats         Chat[]    @relation("ChatParticipants")
 
   // نظام المتابعة
   followers     Follow[] @relation("UserFollowers")
@@ -39,6 +43,16 @@ model User {
 
   // الإشعارات
   notifications Notification[]
+}
+
+// جدول المحادثات (الدردشة الجماعية أو الثنائية)
+model Chat {
+  id           String    @id @default(uuid())
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  participants User[]    @relation("ChatParticipants")
+  messages     Message[]
 }
 
 // جدول نظام المتابعة (Followers & Following)
@@ -131,11 +145,11 @@ model Message {
   isRead     Boolean  @default(false)
   createdAt  DateTime @default(now())
 
+  chat_id    String
+  chat       Chat     @relation(fields: [chat_id], references: [id], onDelete: Cascade)
+
   senderId   String
   sender     User     @relation("Sender", fields: [senderId], references: [id], onDelete: Cascade)
-
-  receiverId String
-  receiver   User     @relation("Receiver", fields: [receiverId], references: [id], onDelete: Cascade)
 }
 
 // جدول الإشعارات

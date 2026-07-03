@@ -3,6 +3,34 @@
 import prisma from '@/lib/prisma';
 import { auth } from '@/auth';
 
+export async function searchUsers(query: string) {
+  try {
+    if (!query.trim()) return { success: true, data: [] };
+
+    const users = await prisma.user.findMany({
+      where: {
+        OR: [
+          { username: { contains: query, mode: 'insensitive' } },
+          { fullName: { contains: query, mode: 'insensitive' } }
+        ]
+      },
+      select: {
+        id: true,
+        username: true,
+        fullName: true,
+        avatarUrl: true,
+        isVerified: true
+      },
+      take: 20
+    });
+
+    return { success: true, data: users };
+  } catch (error) {
+    console.error('Error searching users:', error);
+    return { success: false, error: 'Failed to search users' };
+  }
+}
+
 export async function getUserProfile(userId: string) {
   try {
     const user = await prisma.user.findUnique({
@@ -13,6 +41,7 @@ export async function getUserProfile(userId: string) {
         fullName: true,
         avatarUrl: true,
         bio: true,
+        isVerified: true,
         _count: {
           select: { followers: true, following: true }
         }
@@ -35,10 +64,41 @@ export async function getUserProfile(userId: string) {
   }
 }
 
+export async function toggleVerification(userId: string) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id || (session.user as any).role !== 'ADMIN') {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return { success: false, error: 'User not found' };
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { isVerified: !user.isVerified }
+    });
+
+    return { success: true, data: { isVerified: updatedUser.isVerified } };
+  } catch (error) {
+    console.error('Error toggling verification:', error);
+    return { success: false, error: 'Failed to toggle verification' };
+  }
+}
+
 export async function updateUserProfile(data: { fullName?: string, username?: string, bio?: string, avatarUrl?: string }) {
   try {
     const session = await auth();
     if (!session?.user?.id) return { success: false, error: 'Unauthorized' };
+
+    if (data.username !== undefined) {
+      const isAdmin = session.user.role === 'ADMIN';
+      if (!isAdmin) {
+        if (data.username.length < 4 || data.username.length > 14) {
+          return { success: false, error: 'يجب أن يكون طول اسم المستخدم بين 4 و 14 حرفاً' };
+        }
+      }
+    }
 
     const updatedUser = await prisma.user.update({
       where: { id: session.user.id },
@@ -46,8 +106,11 @@ export async function updateUserProfile(data: { fullName?: string, username?: st
     });
 
     return { success: true, data: updatedUser };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating profile:', error);
+    if (error?.code === 'P2002' && error?.meta?.target?.includes('username')) {
+      return { success: false, error: 'اسم المستخدم هذا محجوز مسبقاً، يرجى اختيار اسم آخر' };
+    }
     return { success: false, error: 'Failed to update profile' };
   }
 }

@@ -28,7 +28,7 @@ export async function getFeedPosts() {
       },
       include: {
         user: {
-          select: { id: true, username: true, avatarUrl: true, fullName: true }
+          select: { id: true, username: true, avatarUrl: true, fullName: true, isVerified: true }
         },
         _count: {
           select: { likes: true, comments: true }
@@ -71,7 +71,7 @@ export async function getReels() {
       where: { mediaType: 'REEL' },
       include: {
         user: {
-          select: { id: true, username: true, avatarUrl: true, fullName: true }
+          select: { id: true, username: true, avatarUrl: true, fullName: true, isVerified: true }
         },
         _count: {
           select: { likes: true, comments: true }
@@ -232,7 +232,7 @@ export async function getLikes(postId: string, cursor?: number) {
       where: { postId },
       include: {
         user: {
-          select: { id: true, username: true, avatarUrl: true, fullName: true }
+          select: { id: true, username: true, avatarUrl: true, fullName: true, isVerified: true }
         }
       },
       orderBy: { createdAt: 'desc' },
@@ -279,7 +279,7 @@ export async function getComments(postId: string, cursor?: string) {
       where: { postId },
       include: {
         user: {
-          select: { id: true, username: true, avatarUrl: true, fullName: true }
+          select: { id: true, username: true, avatarUrl: true, fullName: true, isVerified: true }
         }
       },
       orderBy: { createdAt: 'desc' },
