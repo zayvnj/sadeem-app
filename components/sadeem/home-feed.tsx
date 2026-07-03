@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Loader2, BadgeCheck, Play, Sparkles } from "lucide-react"
 import { useSession } from "next-auth/react"
@@ -182,8 +182,9 @@ export function HomeFeed() {
   // --- Save Mutation with Optimistic Updates ---
   const toggleSaveMutation = useMutation({
     mutationFn: async ({ postId, isNowSaved, user }: { postId: string; isNowSaved: boolean; user: any }) => {
-      // Placeholder for save mutation via server action if implemented later
-      return Promise.resolve()
+      const { toggleSave } = await import("@/app/actions/post")
+      const res = await toggleSave(postId)
+      if (!res.success) throw new Error(res.error)
     },
     onMutate: async ({ postId, isNowSaved }) => {
       await queryClient.cancelQueries({ queryKey: ['feed', 'posts'] })
@@ -217,8 +218,42 @@ export function HomeFeed() {
     }
   })
 
+  const handleSave = (postId: string) => {
+    if (!currentUser) {
+      alert("يجب تسجيل الدخول للحفظ")
+      return
+    }
+    const post = posts.find(p => p.id === postId)
+    if (!post) return
+
+    toggleSaveMutation.mutate({ postId, isNowSaved: !post.isSaved, user: currentUser })
+  }
+
   // Exploding Heart Animation state
   const [explodingPostId, setExplodingPostId] = useState<string | null>(null)
+
+  // Likes Sheet State
+  const [activeLikesPostId, setActiveLikesPostId] = useState<string | null>(null)
+  const likesPressTimer = useRef<NodeJS.Timeout | null>(null)
+
+  const handleLikePointerDown = (postId: string) => {
+    likesPressTimer.current = setTimeout(() => {
+      setActiveLikesPostId(postId)
+      likesPressTimer.current = null
+    }, 500) // 500ms for long press
+  }
+
+  const handleLikePointerUp = (postId: string) => {
+    if (likesPressTimer.current) {
+      clearTimeout(likesPressTimer.current)
+      likesPressTimer.current = null
+      handleLike(postId)
+    }
+  }
+
+  // Comments Sheet State
+  const [activeCommentsPostId, setActiveCommentsPostId] = useState<string | null>(null)
+  const [activeCommentsPostOwnerId, setActiveCommentsPostOwnerId] = useState<string | null>(null)
 
   // Options Sheet State
   const [activeOptionsPost, setActiveOptionsPost] = useState<any | null>(null)
@@ -527,6 +562,22 @@ export function HomeFeed() {
           )}
         </motion.div>
       )}
+
+        <LikesSheet
+          postId={activeLikesPostId}
+          isOpen={!!activeLikesPostId}
+          onClose={() => setActiveLikesPostId(null)}
+        />
+
+        <CommentsSheet
+          postId={activeCommentsPostId}
+          postOwnerId={activeCommentsPostOwnerId}
+          isOpen={!!activeCommentsPostId}
+          onClose={() => {
+            setActiveCommentsPostId(null)
+            setActiveCommentsPostOwnerId(null)
+          }}
+        />
 
       <PostOptionsSheet
         post={activeOptionsPost}
