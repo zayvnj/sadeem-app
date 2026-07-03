@@ -29,6 +29,7 @@ model User {
   stories       Story[]
   comments      Comment[]
   likes         Like[]
+  savedPosts    SavedPost[]
   messagesSent  Message[] @relation("Sender")
   messagesRecv  Message[] @relation("Receiver")
 
@@ -67,6 +68,7 @@ model Post {
 
   comments  Comment[]
   likes     Like[]
+  savedBy   SavedPost[]
 }
 
 // جدول الستوريات (القصص اليومية)
@@ -105,6 +107,20 @@ model Like {
   post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   @@unique([userId, postId]) // يمنع إعطاء لايكين من نفس الشخص لنفس المنشور
+}
+
+// جدول المحفوظات (Saved Posts)
+model SavedPost {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId]) // يمنع حفظ نفس المنشور أكثر من مرة لنفس الشخص
 }
 
 // جدول الرسائل (الدردشة)

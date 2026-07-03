@@ -10,6 +10,7 @@ import { useNavigation } from "./navigation-context"
 import { StoryViewer } from "./story-viewer"
 import { StoryUpload } from "./story-upload"
 import { useStoryNavigation } from "./story/useStoryNavigation"
+import { PostOptionsSheet } from "./post-options-sheet"
 import { useInfiniteQuery, useQuery, useQueryClient, useMutation } from "@tanstack/react-query"
 import { useInView } from "react-intersection-observer"
 
@@ -219,6 +220,9 @@ export function HomeFeed() {
   // Exploding Heart Animation state
   const [explodingPostId, setExplodingPostId] = useState<string | null>(null)
 
+  // Options Sheet State
+  const [activeOptionsPost, setActiveOptionsPost] = useState<any | null>(null)
+
   const handleDoubleTap = (postId: string) => {
     handleLike(postId, true)
 
@@ -398,7 +402,10 @@ export function HomeFeed() {
                     <span className="text-xs text-muted-foreground mt-1 font-medium">@{user?.username}</span>
                   </div>
                 </button>
-                <button className="p-2 -mr-2 rounded-full hover:bg-secondary transition-colors">
+                <button
+                  onClick={() => setActiveOptionsPost(post)}
+                  className="p-2 -mr-2 rounded-full hover:bg-secondary transition-colors"
+                >
                   <MoreHorizontal className="size-5 text-muted-foreground" />
                 </button>
               </div>
@@ -446,24 +453,29 @@ export function HomeFeed() {
               )}
 
               <div className="flex items-center gap-5 px-4 pt-1 pb-2">
-                <ActionButton
-                  icon={<Heart className={`size-6 ${post.isLiked ? 'fill-red-500 text-red-500' : 'text-foreground'}`} />}
-                  label={post.likes_count?.toString()}
-                  onClick={() => handleLike(post.id)}
-                />
+                <div
+                  className="flex items-center gap-1.5 active:opacity-50 transition-opacity touch-none cursor-pointer"
+                  onPointerDown={() => handleLikePointerDown(post.id)}
+                  onPointerUp={() => handleLikePointerUp(post.id)}
+                  onPointerLeave={() => {
+                    if (likesPressTimer.current) {
+                      clearTimeout(likesPressTimer.current)
+                      likesPressTimer.current = null
+                    }
+                  }}
+                >
+                  <Heart className={`size-6 ${post.isLiked ? 'fill-red-500 text-red-500' : 'text-foreground'}`} />
+                  <span className="text-sm font-bold text-foreground">
+                    {post.likes_count || 0}
+                  </span>
+                </div>
+
                 <ActionButton
                   icon={<MessageCircle className="size-6 text-foreground" />}
                   label={post.comments_count?.toString()}
-                  onClick={async () => {
-                    const text = prompt("أضف تعليقاً:");
-                    if (text && text.trim()) {
-                      try {
-                         // Implement add comment via server action if needed later
-                         alert("تم إضافة التعليق مؤقتا");
-                      } catch (e) {
-                         console.error(e);
-                      }
-                    }
+                  onClick={() => {
+                    setActiveCommentsPostId(post.id)
+                    setActiveCommentsPostOwnerId(post.user_id)
                   }}
                 />
                 <ActionButton
@@ -478,10 +490,7 @@ export function HomeFeed() {
                   whileTap={{ scale: 0.8 }}
                   className={`mr-auto text-foreground ${post.isSaved ? 'fill-foreground' : ''}`}
                   aria-label="حفظ"
-                  onClick={() => {
-                    if (!currentUser) return alert("يجب تسجيل الدخول");
-                    toggleSaveMutation.mutate({ postId: post.id, isNowSaved: !post.isSaved, user: currentUser });
-                  }}
+                  onClick={() => handleSave(post.id)}
                 >
                   <motion.div animate={post.isSaved ? { scale: [1, 1.2, 1] } : { scale: 1 }} transition={{ type: 'spring', stiffness: 300, damping: 15 }}>
                     <Bookmark className={`size-5 ${post.isSaved ? 'fill-foreground' : ''}`} />
@@ -518,6 +527,12 @@ export function HomeFeed() {
           )}
         </motion.div>
       )}
+
+      <PostOptionsSheet
+        post={activeOptionsPost}
+        isOpen={!!activeOptionsPost}
+        onClose={() => setActiveOptionsPost(null)}
+      />
     </div>
   )
 }

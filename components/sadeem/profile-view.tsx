@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { motion } from "framer-motion"
 import { Settings, Grid3x3, Film, Bookmark, Bell, Moon, Shield, LogOut, Loader2, User, Camera, Trash2, BadgeCheck, X, ChevronLeft, UserX } from "lucide-react"
 import { useSession, signOut } from "next-auth/react"
-import { getUserProfile, updateUserProfile, getUserPosts, deleteUserAccount } from "@/app/actions/user"
+import { getUserProfile, updateUserProfile, getUserPosts, deleteUserAccount, getSavedPosts } from "@/app/actions/user"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Switch } from "@/components/ui/switch"
 import {
@@ -47,6 +47,8 @@ export function ProfileView() {
 
   const [profile, setProfile] = useState<any>(null)
   const [posts, setPosts] = useState<any[]>([])
+  const [savedPosts, setSavedPosts] = useState<any[]>([])
+  const [loadingSaved, setLoadingSaved] = useState(false)
 
   const [editFullName, setEditFullName] = useState("")
   const [editUsername, setEditUsername] = useState("")
@@ -103,6 +105,18 @@ export function ProfileView() {
 
     fetchProfileData()
   }, [currentUser])
+
+  useEffect(() => {
+    if (activeTab === "saved" && savedPosts.length === 0) {
+      setLoadingSaved(true)
+      getSavedPosts().then(res => {
+        if (res.success && res.data) {
+          setSavedPosts(res.data)
+        }
+        setLoadingSaved(false)
+      })
+    }
+  }, [activeTab])
 
   // Populate edit form when sheet opens
   useEffect(() => {
@@ -505,10 +519,11 @@ export function ProfileView() {
 
       {/* Tabs */}
       <div className="flex border-y border-border">
-        {tabs.map((t, i) => (
+        {tabs.map((t) => (
           <button
             key={t.key}
-            className={`flex flex-1 justify-center py-3 ${i === 0 ? "border-b-2 border-foreground" : "text-muted-foreground"}`}
+            onClick={() => setActiveTab(t.key)}
+            className={`flex flex-1 justify-center py-3 transition-colors ${activeTab === t.key ? "border-b-2 border-foreground text-foreground" : "text-muted-foreground hover:text-foreground/80"}`}
           >
             <t.icon className="size-5" />
           </button>
@@ -517,25 +532,62 @@ export function ProfileView() {
 
       {/* Grid */}
       <motion.div variants={container} initial="hidden" animate="show" className="grid grid-cols-3 gap-0.5 p-0.5 min-h-[300px]">
-        {posts.length > 0 ? (
-          posts.map((post) => (
-            <motion.div
-              key={post.id}
-              variants={item}
-              className="aspect-square bg-gradient-to-br from-muted to-secondary border border-border overflow-hidden"
-            >
-              {post.media_url && (
-                post.media_url.match(/\.(mp4|webm|ogg)$/i) ? (
-                  <video src={post.media_url} className="size-full object-cover" />
-                ) : (
-                  <img src={post.media_url} alt="Post" className="size-full object-cover" />
-                )
-              )}
-            </motion.div>
-          ))
-        ) : (
+        {activeTab === "grid" && (
+          posts.length > 0 ? (
+            posts.map((post) => (
+              <motion.div
+                key={post.id}
+                variants={item}
+                className="aspect-square bg-gradient-to-br from-muted to-secondary border border-border overflow-hidden"
+              >
+                {post.media_url && (
+                  post.media_url.match(/\.(mp4|webm|ogg)$/i) ? (
+                    <video src={post.media_url} className="size-full object-cover" />
+                  ) : (
+                    <img src={post.media_url} alt="Post" className="size-full object-cover" />
+                  )
+                )}
+              </motion.div>
+            ))
+          ) : (
+            <div className="col-span-3 flex items-center justify-center text-sm text-muted-foreground py-10">
+              لا توجد منشورات حتى الآن
+            </div>
+          )
+        )}
+
+        {activeTab === "saved" && (
+          loadingSaved ? (
+            <div className="col-span-3 flex items-center justify-center py-10">
+              <Loader2 className="size-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : savedPosts.length > 0 ? (
+            savedPosts.map((post) => (
+              <motion.div
+                key={post.id}
+                variants={item}
+                className="aspect-square bg-gradient-to-br from-muted to-secondary border border-border overflow-hidden"
+              >
+                {post.media_url && (
+                  post.media_url.match(/\.(mp4|webm|ogg)$/i) ? (
+                    <video src={post.media_url} className="size-full object-cover" />
+                  ) : (
+                    <img src={post.media_url} alt="Post" className="size-full object-cover" />
+                  )
+                )}
+              </motion.div>
+            ))
+          ) : (
+            <div className="col-span-3 flex flex-col items-center justify-center text-sm text-muted-foreground py-10 gap-2">
+              <Bookmark className="size-8 opacity-20" />
+              لا توجد محفوظات حتى الآن
+            </div>
+          )
+        )}
+
+        {activeTab === "reels" && (
           <div className="col-span-3 flex items-center justify-center text-sm text-muted-foreground py-10">
-            لا توجد منشورات حتى الآن
+            مقاطع ريلز قريباً
           </div>
         )}
       </motion.div>
