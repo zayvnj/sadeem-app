@@ -34,13 +34,14 @@ export function CommentsSheet({ postId, postOwnerId, isOpen, onClose }: Comments
     status,
   } = useInfiniteQuery({
     queryKey: ['comments', postId],
-    queryFn: async ({ pageParam = undefined }) => {
+    queryFn: async ({ pageParam = undefined as string | undefined }) => {
       if (!postId) return { comments: [], nextCursor: null }
       const res = await getComments(postId, pageParam)
       if (!res.success) throw new Error(res.error)
       return res.data!
     },
-    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    getNextPageParam: (lastPage: any) => lastPage.nextCursor,
+    initialPageParam: undefined,
     enabled: isOpen && !!postId,
   })
 
@@ -50,7 +51,7 @@ export function CommentsSheet({ postId, postOwnerId, isOpen, onClose }: Comments
     }
   }, [inView, hasNextPage, isFetchingNextPage, fetchNextPage])
 
-  const comments = data?.pages.flatMap((page) => page.comments) || []
+  const comments = data?.pages.flatMap((page: any) => page.comments) || []
 
   const addCommentMutation = useMutation({
     mutationFn: async (text: string) => {

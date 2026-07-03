@@ -526,19 +526,19 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps) {
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-[15px] truncate flex items-center gap-1">
                     {chat.user?.fullName || chat.user?.username}
-                    {chat.user?.isVerified && <BadgeCheck className="size-4 text-blue-500 shrink-0" />}
+                    {(chat.user as any)?.isVerified && <BadgeCheck className="size-4 text-blue-500 shrink-0" />}
                   </span>
                   <span className="text-[11px] text-muted-foreground shrink-0 font-medium opacity-80 whitespace-nowrap">
                     {chat.lastMessageTime && new Date(chat.lastMessageTime).toLocaleDateString('ar-SA', { month: 'short', day: 'numeric' })}
                   </span>
                 </div>
                 <div className="flex items-center justify-between mt-1 gap-2">
-                  <p className={`truncate text-sm opacity-90 leading-relaxed ${chat.unread > 0 ? "font-bold text-foreground" : "text-muted-foreground"}`}>
+                  <p className={`truncate text-sm opacity-90 leading-relaxed ${chat.unreadCount > 0 ? "font-bold text-foreground" : "text-muted-foreground"}`}>
                     {chat.lastMessage}
                   </p>
-                  {chat.unread > 0 && (
+                  {chat.unreadCount > 0 && (
                     <span className="flex size-[18px] shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground shadow-sm">
-                      {chat.unread}
+                      {chat.unreadCount}
                     </span>
                   )}
                 </div>
