@@ -18,7 +18,7 @@ interface LikesSheetProps {
 
 export function LikesSheet({ postId, isOpen, onClose }: LikesSheetProps) {
   const { data: session } = useSession()
-  const { navigateToProfile } = useNavigation()
+  const { setSelectedUserId } = useNavigation()
   const { ref, inView } = useInView()
 
   const {
@@ -75,7 +75,7 @@ export function LikesSheet({ postId, isOpen, onClose }: LikesSheetProps) {
                     className="flex items-center gap-3 cursor-pointer"
                     onClick={() => {
                       onClose()
-                      navigateToProfile(user.id)
+                      setSelectedUserId(user.id)
                     }}
                   >
                     <Avatar className="size-10 border border-border">
