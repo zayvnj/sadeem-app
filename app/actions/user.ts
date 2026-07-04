@@ -218,6 +218,24 @@ export async function toggleFollow(followingId: string) {
   }
 }
 
+export async function getNotifications() {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) return { success: false, error: 'Unauthorized' };
+
+    const notifications = await prisma.notification.findMany({
+      where: { userId: session.user.id },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
+    return { success: true, data: notifications };
+  } catch (error) {
+    console.error('Error fetching notifications:', error);
+    return { success: false, error: 'Failed to fetch notifications' };
+  }
+}
+
 export async function deleteUserAccount() {
   try {
     const session = await auth();

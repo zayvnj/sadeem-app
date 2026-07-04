@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Heart, MessageCircle, Send, Music2, Play, Volume2, VolumeX, Loader2, BadgeCheck, Film } from "lucide-react"
+import { Heart, MessageCircle, Send, Music2, Play, Volume2, VolumeX, Loader2, BadgeCheck, Film, PlusSquare, Clapperboard } from "lucide-react"
 import { useSession } from "next-auth/react"
 import { getReels, toggleLike, toggleSave } from "@/app/actions/post"
 import { useNavigation } from "./navigation-context"
@@ -10,6 +10,7 @@ import { LikesSheet } from "./likes-sheet"
 import { CommentsSheet } from "./comments-sheet"
 import { Bookmark, MoreHorizontal } from "lucide-react"
 import { PostOptionsSheet } from "./post-options-sheet"
+import { toast } from "sonner"
 
 export function ReelsView() {
   const [reels, setReels] = useState<any[]>([])
@@ -127,6 +128,7 @@ export function ReelsView() {
   const [activeCommentsPostId, setActiveCommentsPostId] = useState<string | null>(null)
   const [activeCommentsPostOwnerId, setActiveCommentsPostOwnerId] = useState<string | null>(null)
   const [activeOptionsPost, setActiveOptionsPost] = useState<any | null>(null)
+  const [isUploadingReel, setIsUploadingReel] = useState(false)
 
   const handleScroll = () => {
     if (!containerRef.current) return
@@ -162,8 +164,63 @@ export function ReelsView() {
     <div
       ref={containerRef}
       onScroll={handleScroll}
-      className="h-full w-full bg-black overflow-y-auto snap-y snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="relative h-full w-full bg-black overflow-y-auto snap-y snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
+      {/* Upload Reel Button Overlay */}
+      <div className="absolute top-4 right-4 z-50">
+        <label className="flex items-center justify-center rounded-full bg-black/40 backdrop-blur-md p-2 hover:bg-black/60 transition-colors cursor-pointer text-white">
+          <input
+            type="file"
+            accept="video/*"
+            className="hidden"
+            disabled={isUploadingReel}
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+
+              if (file.size > 20 * 1024 * 1024) {
+                toast.error("حجم الفيديو يجب أن يكون أقل من 20 ميجابايت");
+                return;
+              }
+
+              setIsUploadingReel(true);
+              const toastId = toast.loading("جاري رفع الريلز...");
+
+              try {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const uploadRes = await fetch('/api/upload', {
+                  method: 'POST',
+                  body: formData
+                });
+                const uploadData = await uploadRes.json();
+
+                if (!uploadData.success) throw new Error("فشل في رفع الملف");
+
+                const { createPost } = await import("@/app/actions/post");
+                const res = await createPost({
+                  caption: "",
+                  mediaUrl: uploadData.url,
+                  mediaType: "REEL"
+                });
+
+                if (!res.success) throw new Error(res.error || "فشل حفظ الريلز");
+
+                toast.success("تم رفع الريلز بنجاح", { id: toastId });
+                // Optional: refresh reels here if desired
+              } catch (err: any) {
+                toast.error(err.message || "حدث خطأ أثناء الرفع", { id: toastId });
+              } finally {
+                setIsUploadingReel(false);
+                e.target.value = "";
+              }
+            }}
+          />
+          {isUploadingReel ? <Loader2 className="size-6 animate-spin" /> : <Clapperboard className="size-6" />}
+        </label>
+      </div>
+
       {reels.map((reel, index) => (
         <ReelItem
           key={reel.id}

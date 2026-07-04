@@ -136,87 +136,28 @@ function AppShellContent() {
       >
         {/* Header */}
         <header
-          className={`flex shrink-0 items-center justify-between px-4 py-3 transition-colors duration-300 ${
+          className={`flex shrink-0 items-center justify-between px-4 py-3 transition-colors duration-300 relative ${
             isReels ? "bg-black text-white" : "bg-background text-foreground"
           }`}
         >
-          <motion.div
-            key={active}
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex items-center"
-          >
-            {active === "home" ? (
-              <Logo className="text-2xl" />
-            ) : (
-              <h1 className="text-xl font-bold tracking-tight">
-                {titles[active]}
-              </h1>
-            )}
-          </motion.div>
-          {active === "home" && (
-            <div className="flex items-center gap-4">
-                            <button onClick={() => setShowCreatePost(true)} className="rounded-full p-1 hover:bg-secondary transition-colors">
-                <PlusSquare className="size-6" />
-              </button>
-              <label className="rounded-full p-1 hover:bg-secondary transition-colors cursor-pointer relative">
-                <input
-                  type="file"
-                  accept="video/*"
-                  className="hidden"
-                  disabled={isUploadingReel}
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
+          {/* Header Left - Messages */}
+          <div className="flex-1">
+            <button onClick={() => setActive("chat")} className="rounded-full p-1 hover:bg-secondary transition-colors">
+              <Send className="size-6" />
+            </button>
+          </div>
 
-                    if (file.size > 20 * 1024 * 1024) {
-                      toast.error("حجم الفيديو يجب أن يكون أقل من 20 ميجابايت");
-                      return;
-                    }
+          {/* Header Center - Logo */}
+          <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none">
+            <Logo className="text-3xl" />
+          </div>
 
-                    setIsUploadingReel(true);
-                    const toastId = toast.loading("جاري رفع الريلز...");
-
-                    try {
-                      const formData = new FormData();
-                      formData.append('file', file);
-
-                      const uploadRes = await fetch('/api/upload', {
-                        method: 'POST',
-                        body: formData
-                      });
-                      const uploadData = await uploadRes.json();
-
-                      if (!uploadData.success) throw new Error("فشل في رفع الملف");
-
-                      const { createPost } = await import("@/app/actions/post");
-                      const res = await createPost({
-                        caption: "",
-                        mediaUrl: uploadData.url,
-                        mediaType: "REEL"
-                      });
-
-                      if (!res.success) throw new Error(res.error || "فشل حفظ الريلز");
-
-                      toast.success("تم رفع الريلز بنجاح", { id: toastId });
-                    } catch (err: any) {
-                      toast.error(err.message || "حدث خطأ أثناء الرفع", { id: toastId });
-                    } finally {
-                      setIsUploadingReel(false);
-                      e.target.value = "";
-                    }
-                  }}
-                />
-                {isUploadingReel ? <Loader2 className="size-6 animate-spin" /> : <Clapperboard className="size-6" />}
-              </label>
-              <button onClick={() => setActive("notifications")} className="rounded-full p-1 hover:bg-secondary transition-colors">
-                <Heart className="size-6" />
-              </button>
-              <button onClick={() => setActive("chat")} className="rounded-full p-1 hover:bg-secondary transition-colors">
-                <Send className="size-6" />
-              </button>
-            </div>
-          )}
+          {/* Header Right - Notifications */}
+          <div className="flex-1 flex justify-end gap-2">
+            <button onClick={() => setActive("notifications")} className="rounded-full p-1 hover:bg-secondary transition-colors">
+              <Heart className="size-6" />
+            </button>
+          </div>
         </header>
 
         {/* Content */}
