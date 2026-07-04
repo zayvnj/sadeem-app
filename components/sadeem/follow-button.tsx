@@ -10,11 +10,12 @@ import { useQueryClient, useMutation } from "@tanstack/react-query"
 interface FollowButtonProps {
   userId: string
   initialIsFollowing: boolean
+  initialIsFollowedBy?: boolean
   onToggleSuccess?: (isFollowing: boolean) => void
   className?: string
 }
 
-export function FollowButton({ userId, initialIsFollowing, onToggleSuccess, className = "" }: FollowButtonProps) {
+export function FollowButton({ userId, initialIsFollowing, initialIsFollowedBy = false, onToggleSuccess, className = "" }: FollowButtonProps) {
   const [isFollowing, setIsFollowing] = useState(initialIsFollowing)
   const queryClient = useQueryClient()
   const { data: session } = useSession()
@@ -69,7 +70,7 @@ export function FollowButton({ userId, initialIsFollowing, onToggleSuccess, clas
       {isFollowLoading ? (
         <Loader2 className="size-5 animate-spin" />
       ) : (
-        isFollowing ? "إلغاء المتابعة" : "متابعة"
+        isFollowing ? "إلغاء المتابعة" : (initialIsFollowedBy ? "رد المتابعة" : "متابعة")
       )}
     </button>
   )

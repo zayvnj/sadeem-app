@@ -91,22 +91,26 @@ export async function getChats() {
   }
 }
 
-export async function getMessages(chatId: string) {
+export async function getMessages(otherUserId: string) {
   try {
     const session = await auth();
     if (!session?.user?.id) return { success: false, error: 'Unauthorized' };
 
     const userId = session.user.id;
 
-    // Verify user is part of chat
+    // Verify user is part of chat or find chat
     const chat = await prisma.chat.findFirst({
       where: {
-        id: chatId,
-        participants: { some: { id: userId } }
+        AND: [
+          { participants: { some: { id: userId } } },
+          { participants: { some: { id: otherUserId } } }
+        ]
       }
     });
 
-    if (!chat) return { success: false, error: 'Chat not found' };
+    if (!chat) return { success: true, data: [] }; // No chat yet means no messages
+
+    const chatId = chat.id;
 
     const messages = await prisma.message.findMany({
       where: { chat_id: chatId },
@@ -132,7 +136,7 @@ export async function getMessages(chatId: string) {
   }
 }
 
-export async function sendMessage(chatId: string, text?: string, mediaUrl?: string) {
+export async function sendMessage(otherUserId: string, text?: string, mediaUrl?: string) {
   try {
     const session = await auth();
     if (!session?.user?.id) return { success: false, error: 'Unauthorized' };
@@ -140,6 +144,10 @@ export async function sendMessage(chatId: string, text?: string, mediaUrl?: stri
     if (!text && !mediaUrl) {
       return { success: false, error: 'Message cannot be empty' };
     }
+
+    const chatRes = await findOrCreateChat(otherUserId);
+    if (!chatRes.success || !chatRes.data) return { success: false, error: 'Failed to initiate chat' };
+    const chatId = chatRes.data.chatId;
 
     const newMessage = await prisma.message.create({
       data: {

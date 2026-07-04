@@ -147,16 +147,27 @@ export async function checkFollowStatus(followingId: string) {
     const session = await auth();
     if (!session?.user?.id) return { success: false, error: 'Unauthorized' };
 
+    const currentUserId = session.user.id;
+
     const follow = await prisma.follow.findUnique({
       where: {
         followerId_followingId: {
-          followerId: session.user.id,
+          followerId: currentUserId,
           followingId
         }
       }
     });
 
-    return { success: true, data: { isFollowing: !!follow } };
+    const followedBy = await prisma.follow.findUnique({
+      where: {
+        followerId_followingId: {
+          followerId: followingId,
+          followingId: currentUserId
+        }
+      }
+    });
+
+    return { success: true, data: { isFollowing: !!follow, isFollowedBy: !!followedBy } };
   } catch (error) {
     console.error('Error checking follow status:', error);
     return { success: false, error: 'Failed to check follow status' };
