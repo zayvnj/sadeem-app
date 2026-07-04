@@ -609,7 +609,7 @@ export function HomeFeed() {
                   aria-label="حفظ"
                   onClick={(e: React.MouseEvent) => handleSave(e, post.id)}
                 >
-                  <motion.div animate={post.isSaved ? { scale: [1, 1.2, 1] } : { scale: 1 }} transition={{ type: 'spring', stiffness: 300, damping: 15 }}>
+                  <motion.div animate={post.isSaved ? { scale: [1, 1.2, 1] } : { scale: 1 }} transition={{ duration: 0.3 }}>
                     <Bookmark className={`size-5 ${post.isSaved ? 'fill-foreground' : ''}`} />
                   </motion.div>
                 </motion.button>
