@@ -7,6 +7,7 @@ import { App } from '@capacitor/app'
 import { Capacitor } from '@capacitor/core'
 import { toast } from 'sonner'
 import { useSession } from "next-auth/react"
+import { updateLastActive } from "@/app/actions/user"
 import { BottomNav } from "./bottom-nav"
 import { HomeFeed } from "./home-feed"
 import { ReelsView } from "./reels-view"
@@ -46,6 +47,12 @@ function AppShellContent() {
   const isReels = active === "reels"
 
   const [backPressCount, setBackPressCount] = useState(0)
+
+  useEffect(() => {
+    if (user) {
+      updateLastActive().catch(err => console.error("Failed to update last active:", err));
+    }
+  }, [user])
 
   useEffect(() => {
     // Listen for custom event to switch tabs from deeply nested components
@@ -139,7 +146,7 @@ function AppShellContent() {
             className="flex items-center"
           >
             {active === "home" ? (
-              <Logo className="w-10 h-10" />
+              <Logo className="text-2xl" />
             ) : (
               <h1 className="text-xl font-bold tracking-tight">
                 {titles[active]}
