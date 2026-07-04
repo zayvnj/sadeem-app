@@ -146,7 +146,7 @@ function AppShellContent() {
             className="flex items-center"
           >
             {active === "home" ? (
-              <Logo className="w-10 h-10" />
+              <Logo className="text-2xl" />
             ) : (
               <h1 className="text-xl font-bold tracking-tight">
                 {titles[active]}

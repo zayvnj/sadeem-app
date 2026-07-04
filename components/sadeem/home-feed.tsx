@@ -359,7 +359,7 @@ export function HomeFeed() {
       {/* Pull to refresh indicator */}
       <motion.div
         className="absolute top-0 left-0 right-0 flex justify-center z-10 pointer-events-none"
-        animate={{ y: isRefreshing ? 20 : Math.max(0, dragY - 40) }}
+        animate={{ y: isRefreshing ? 20 : (dragY > 0 ? Math.max(0, dragY - 40) : -40) }}
         initial={{ y: -40 }}
       >
         <div className="bg-background shadow-md rounded-full p-2 mt-4">
