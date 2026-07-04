@@ -34,7 +34,7 @@ const item = {
 
 export function HomeFeed() {
   const [viewedStoryIds, setViewedStoryIds] = useState<Set<string>>(new Set())
-  const { setSelectedUserId, storyViewerData, setStoryViewerData } = useNavigation()
+  const { setSelectedUserId, storyViewerData, setStoryViewerData, setShowStoryUpload } = useNavigation()
 
   const { data: session } = useSession()
   const currentUser = session?.user
@@ -393,20 +393,9 @@ export function HomeFeed() {
         }}
         animate={{ y: isRefreshing ? 60 : 0 }}
       >
-      <div className="px-4 py-6">
-        <h1 className="text-[28px] font-black tracking-tight flex flex-col leading-none">
-          <span className="text-foreground">مرحباً بعودتك</span>
-          {currentUser && (
-            <span className="text-muted-foreground mt-1 text-xl flex items-center gap-2">
-              <span className="inline-block w-8 h-1 bg-primary rounded-full"></span>
-              {currentUser.name || (currentUser as any).fullName || "سديم"}
-            </span>
-          )}
-        </h1>
-      </div>
 
       {/* Stories horizontal scroll */}
-      <div className="mb-8 w-full overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="mb-8 mt-6 w-full overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="flex gap-4">
           <button
             onClick={() => handleAvatarTap(currentUser?.id || '')}
@@ -420,7 +409,13 @@ export function HomeFeed() {
                   <Heart className="size-8 text-muted-foreground" />
                 )}
               </div>
-              <div className="absolute -bottom-1 -right-1 flex size-6 items-center justify-center rounded-full bg-foreground text-background shadow-sm border-2 border-background">
+              <div
+                className="absolute -bottom-1 -right-1 flex size-6 items-center justify-center rounded-full bg-foreground text-background shadow-sm border-2 border-background cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowStoryUpload(true);
+                }}
+              >
                 <span className="text-lg leading-none mt-[-2px]">+</span>
               </div>
             </div>
