@@ -20,7 +20,7 @@ export function GlobalLoadingScreen() {
           repeat: Infinity,
         }}
       >
-        <Logo className="h-32 w-32 md:h-48 md:w-48" />
+        <Logo className="text-6xl md:text-8xl" />
       </motion.div>
     </motion.div>
   )

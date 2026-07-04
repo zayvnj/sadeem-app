@@ -79,8 +79,8 @@ export function AuthView() {
   return (
     <div className="flex h-full min-h-dvh w-full flex-col items-center justify-center bg-background p-6" dir="rtl">
       <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-8 shadow-2xl">
-        <div className="mb-8 text-center">
-          <Logo className="w-24 h-24 mx-auto mb-4" />
+        <div className="mb-8 text-center flex flex-col items-center">
+          <Logo className="text-5xl mb-4" />
           <p className="mt-2 text-sm text-muted-foreground">
             {isLogin ? "تسجيل الدخول إلى حسابك" : "إنشاء حساب جديد"}
           </p>
