@@ -1,14 +1,48 @@
 "use client"
 
-import { Bell, Heart, MessageCircle, UserPlus } from "lucide-react"
+import { useEffect, useState } from "react"
+import { Bell, Heart, MessageCircle, UserPlus, Loader2 } from "lucide-react"
+import { getNotifications } from "@/app/actions/user"
+import { formatDistanceToNow } from "date-fns"
+import { ar } from "date-fns/locale"
 
 export function NotificationsView() {
-  const notifications = [
-    { id: 1, type: "like", user: "أحمد", text: "أعجب بمنشورك", time: "منذ ساعتين", icon: Heart, color: "text-red-500" },
-    { id: 2, type: "comment", user: "سارة", text: "علقت على صورتك: روعة!", time: "منذ 4 ساعات", icon: MessageCircle, color: "text-blue-500" },
-    { id: 3, type: "follow", user: "علي", text: "بدأ بمتابعتك", time: "منذ يوم", icon: UserPlus, color: "text-green-500" },
-    { id: 4, type: "like", user: "نور", text: "أعجبت بالريلز الخاص بك", time: "منذ يومين", icon: Heart, color: "text-red-500" },
-  ]
+  const [notifications, setNotifications] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function loadNotifications() {
+      try {
+        const res = await getNotifications();
+        if (res.success && res.data) {
+          setNotifications(res.data);
+        }
+      } catch (e) {
+        console.error(e)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadNotifications();
+  }, [])
+
+  const getIcon = (type: string) => {
+    switch (type) {
+      case 'LIKE': return Heart;
+      case 'COMMENT': return MessageCircle;
+      case 'FOLLOW': return UserPlus;
+      default: return Bell;
+    }
+  }
+
+  const getColor = (type: string) => {
+    switch (type) {
+      case 'LIKE': return 'text-red-500';
+      case 'COMMENT': return 'text-blue-500';
+      case 'FOLLOW': return 'text-green-500';
+      default: return 'text-gray-500';
+    }
+  }
 
   return (
     <div className="flex flex-col h-full bg-background pb-20">
@@ -17,19 +51,33 @@ export function NotificationsView() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 space-y-4 [scrollbar-width:none]">
-        {notifications.map((notif) => (
-          <div key={notif.id} className="flex items-center gap-4 rounded-xl border border-border bg-card p-3 shadow-sm">
-            <div className={`flex size-10 items-center justify-center rounded-full bg-secondary ${notif.color}`}>
-              <notif.icon className="size-5" />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm">
-                <span className="font-semibold">{notif.user}</span> {notif.text}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">{notif.time}</p>
-            </div>
+        {loading ? (
+          <div className="flex items-center justify-center h-40">
+            <Loader2 className="size-8 animate-spin text-muted-foreground" />
           </div>
-        ))}
+        ) : notifications.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
+            <Bell className="size-10 mb-2 opacity-50" />
+            <p>لا توجد إشعارات حالياً</p>
+          </div>
+        ) : (
+          notifications.map((notif) => {
+            const Icon = getIcon(notif.type)
+            return (
+              <div key={notif.id} className={`flex items-center gap-4 rounded-xl border border-border bg-card p-3 shadow-sm ${!notif.isRead ? 'bg-secondary/20' : ''}`}>
+                <div className={`flex size-10 shrink-0 items-center justify-center rounded-full bg-secondary ${getColor(notif.type)}`}>
+                  <Icon className="size-5" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm">{notif.content}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true, locale: ar })}
+                  </p>
+                </div>
+              </div>
+            )
+          })
+        )}
       </div>
     </div>
   )

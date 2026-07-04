@@ -2,18 +2,41 @@
 
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import { Search, Loader2 } from "lucide-react"
+import { Search, Loader2, Play } from "lucide-react"
 import { searchUsers } from "@/app/actions/user"
+import { getExploreFeed } from "@/app/actions/post"
 import { useNavigation } from "./navigation-context"
 import { VerifiedBadge } from "./verified-badge"
 import { useDebounce } from "use-debounce"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 
 export function SearchView() {
   const [query, setQuery] = useState("")
   const [debouncedQuery] = useDebounce(query, 500)
   const [results, setResults] = useState<any[]>([])
+  const [explorePosts, setExplorePosts] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
+  const [loadingExplore, setLoadingExplore] = useState(true)
   const { setSelectedUserId } = useNavigation()
+  const { data: session } = useSession()
+  const currentUser = session?.user
+
+  useEffect(() => {
+    async function fetchExploreFeed() {
+      try {
+        const res = await getExploreFeed()
+        if (res.success && res.data) {
+          setExplorePosts(res.data)
+        }
+      } catch (error) {
+        console.error("Explore feed error:", error)
+      } finally {
+        setLoadingExplore(false)
+      }
+    }
+    fetchExploreFeed()
+  }, [])
 
   useEffect(() => {
     async function performSearch() {
@@ -58,12 +81,76 @@ export function SearchView() {
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto space-y-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pb-20">
         {!query.trim() ? (
-          <div className="flex flex-col items-center justify-center h-full text-muted-foreground space-y-4">
-            <Search className="size-12 opacity-20" />
-            <p className="text-sm">ابحث عن أصدقاء جدد</p>
-          </div>
+          loadingExplore ? (
+            <div className="flex items-center justify-center h-40">
+              <Loader2 className="size-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : explorePosts.length > 0 ? (
+            <div className="grid grid-cols-3 gap-1">
+              {explorePosts.map((post) => (
+                <div
+                  key={post.id}
+                  className="relative aspect-square cursor-pointer group bg-secondary"
+                  onClick={() => {
+                    // For now, simple console log or navigation.
+                    // Ideally opens post modal or sets active tab based on media type.
+                    // Given instructions we'll rely on the avatar click for routing mostly,
+                    // but we can add post view if requested.
+                  }}
+                >
+                  {post.media_url && (post.media_url.match(/\.(mp4|webm|ogg)$/i) || post.mediaType === 'REEL') ? (
+                    <>
+                      <video src={post.media_url} className="w-full h-full object-cover" muted playsInline />
+                      <div className="absolute top-1 right-1 bg-black/50 rounded p-0.5">
+                        <Play className="size-4 text-white" />
+                      </div>
+                    </>
+                  ) : post.media_url ? (
+                    <img src={post.media_url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500" />
+                  )}
+
+                  {/* Overlay on hover for desktop, or tap target for mobile author routing */}
+                  <div
+                    className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2"
+                    onClick={(e) => {
+                       e.stopPropagation();
+                       if (post.user_id === currentUser?.id) {
+                         // We are simulating navigating to own profile.
+                         // Normally we'd use a switch-tab event if available.
+                         window.dispatchEvent(new CustomEvent('switch-tab', { detail: 'profile' }))
+                       } else {
+                         setSelectedUserId(post.user_id)
+                       }
+                    }}
+                  >
+                    <div className="flex items-center gap-1.5 cursor-pointer">
+                      <div className="size-6 rounded-full overflow-hidden bg-secondary">
+                        {post.user?.avatarUrl ? (
+                          <img src={post.user.avatarUrl} alt="" className="size-full object-cover" />
+                        ) : (
+                          <div className="size-full flex items-center justify-center bg-muted text-[10px] text-foreground font-bold">
+                            {(post.user?.username || "م").charAt(0)}
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-white text-xs font-semibold drop-shadow-md truncate max-w-[80px]">
+                        {post.user?.username}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-40 text-muted-foreground space-y-4">
+              <Search className="size-12 opacity-20" />
+              <p className="text-sm">لا توجد منشورات للاستكشاف</p>
+            </div>
+          )
         ) : results.length > 0 ? (
           results.map((user) => (
             <motion.div
