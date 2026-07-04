@@ -39,6 +39,15 @@ export function StoryViewer({ stories, initialStoryIndex = 0, onClose, onComplet
 
   const currentStory = stories[currentIndex]
 
+  const handleNext = () => {
+    if (currentIndex < stories.length - 1) {
+      setCurrentIndex((prev) => prev + 1)
+      setProgress(0)
+    } else {
+      onComplete()
+    }
+  }
+
   // Start/Resume progress
   useEffect(() => {
     if (isPaused) {
@@ -64,16 +73,8 @@ export function StoryViewer({ stories, initialStoryIndex = 0, onClose, onComplet
     return () => {
       if (progressRef.current) clearInterval(progressRef.current)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIndex, isPaused, currentStory])
-
-  const handleNext = () => {
-    if (currentIndex < stories.length - 1) {
-      setCurrentIndex((prev) => prev + 1)
-      setProgress(0)
-    } else {
-      onComplete()
-    }
-  }
 
   const handlePrev = () => {
     if (currentIndex > 0) {
