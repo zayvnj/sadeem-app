@@ -62,6 +62,44 @@ export async function getFeedPosts() {
   }
 }
 
+export async function getExploreFeed() {
+  try {
+    const session = await auth();
+    const userId = session?.user?.id;
+
+    const posts = await prisma.post.findMany({
+      include: {
+        user: {
+          select: { id: true, username: true, avatarUrl: true, fullName: true, isVerified: true }
+        },
+        _count: {
+          select: { likes: true, comments: true }
+        },
+        likes: userId ? { where: { userId } } : false,
+        savedBy: userId ? { where: { userId } } : false
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50
+    });
+
+    const formattedPosts = posts.map(post => ({
+      ...post,
+      isLiked: userId ? post.likes.length > 0 : false,
+      isSaved: userId ? post.savedBy.length > 0 : false,
+      likesCount: post._count.likes,
+      commentsCount: post._count.comments,
+      user_id: post.userId,
+      media_url: post.mediaUrl,
+      created_at: post.createdAt,
+    }));
+
+    return { success: true, data: formattedPosts };
+  } catch (error) {
+    console.error('Error fetching explore feed:', error);
+    return { success: false, error: 'Failed to fetch explore feed' };
+  }
+}
+
 export async function getReels() {
   try {
     const session = await auth();
@@ -152,7 +190,7 @@ export async function toggleLike(postId: string) {
            data: {
              userId: post.userId,
              type: 'LIKE',
-             content: `${session.user.name || (session.user as any).username} liked your post.`
+             content: `${session.user.name || (session.user as any).username} أعجب بمنشورك.`
            }
          });
       }
@@ -213,6 +251,17 @@ export async function addComment(postId: string, text: string) {
         }
       }
     });
+
+    const post = await prisma.post.findUnique({ where: { id: postId }, select: { userId: true } });
+    if (post && post.userId !== session.user.id) {
+       await prisma.notification.create({
+         data: {
+           userId: post.userId,
+           type: 'COMMENT',
+           content: `${session.user.name || (session.user as any).username} علق على منشورك: "${text.substring(0, 20)}${text.length > 20 ? '...' : ''}"`
+         }
+       });
+    }
 
     return { success: true, data: comment };
   } catch (error) {
