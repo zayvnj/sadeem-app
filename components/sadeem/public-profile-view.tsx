@@ -30,6 +30,7 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
   const [messageLoading, setMessageLoading] = useState(false)
   const router = useRouter()
   const [isFollowing, setIsFollowing] = useState(false)
+  const [isFollowedBy, setIsFollowedBy] = useState(false)
   const [followersCount, setFollowersCount] = useState(0)
   const [followingCount, setFollowingCount] = useState(0)
   const [activeTab, setActiveTab] = useState("grid")
@@ -55,6 +56,9 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
           const followRes = await checkFollowStatus(userId)
           if (followRes.success) {
             setIsFollowing(followRes.data!.isFollowing)
+            if (followRes.data!.isFollowedBy !== undefined) {
+              setIsFollowedBy(followRes.data!.isFollowedBy)
+            }
           }
         }
 
@@ -216,6 +220,7 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
             <FollowButton
               userId={userId}
               initialIsFollowing={isFollowing}
+              initialIsFollowedBy={isFollowedBy}
               className="flex-1 py-2.5"
               onToggleSuccess={(following) => {
                 setFollowersCount(prev => following ? prev + 1 : Math.max(0, prev - 1))
