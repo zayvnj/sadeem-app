@@ -54,7 +54,7 @@ export async function getChats() {
       include: {
         participants: {
           where: { id: { not: userId } },
-          select: { id: true, username: true, avatarUrl: true, fullName: true, isOnline: true }
+          select: { id: true, username: true, avatarUrl: true, fullName: true, isOnline: true, lastActive: true }
         },
         messages: {
           orderBy: { createdAt: 'desc' },

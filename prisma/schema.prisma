@@ -23,6 +23,7 @@ model User {
   isOnline   Boolean  @default(false)
   role       String   @default("USER")
   isVerified Boolean  @default(false)
+  lastActive DateTime @default(now())
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

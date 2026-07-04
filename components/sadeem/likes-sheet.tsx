@@ -30,13 +30,14 @@ export function LikesSheet({ postId, isOpen, onClose }: LikesSheetProps) {
     status,
   } = useInfiniteQuery({
     queryKey: ['likes', postId],
-    queryFn: async ({ pageParam = undefined }) => {
+    queryFn: async ({ pageParam = undefined as number | undefined }) => {
       if (!postId) return { users: [], nextCursor: null }
       const res = await getLikes(postId, pageParam)
       if (!res.success) throw new Error(res.error)
       return res.data!
     },
-    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    getNextPageParam: (lastPage: any) => lastPage.nextCursor,
+    initialPageParam: undefined,
     enabled: isOpen && !!postId,
   })
 
@@ -46,7 +47,7 @@ export function LikesSheet({ postId, isOpen, onClose }: LikesSheetProps) {
     }
   }, [inView, hasNextPage, isFetchingNextPage, fetchNextPage])
 
-  const users = data?.pages.flatMap((page) => page.users) || []
+  const users = data?.pages.flatMap((page: any) => page.users) || []
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>

@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 import { QueryProvider } from '@/lib/query-provider'
 import { SessionProvider } from 'next-auth/react'
+import { Toaster } from '@/components/ui/sonner'
 
 const cairo = Cairo({ subsets: ['arabic', 'latin'], variable: '--font-cairo' })
 
@@ -43,6 +44,7 @@ export default function RootLayout({
             {children}
           </QueryProvider>
         </SessionProvider>
+        <Toaster position="bottom-center" />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
