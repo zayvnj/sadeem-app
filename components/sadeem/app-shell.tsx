@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { Heart, Send, PlusSquare } from "lucide-react"
+import { Heart, Send, PlusSquare, Clapperboard, Loader2 } from "lucide-react"
 import { App } from '@capacitor/app'
 import { Capacitor } from '@capacitor/core'
 import { toast } from 'sonner'
@@ -11,7 +11,7 @@ import { updateLastActive } from "@/app/actions/user"
 import { BottomNav } from "./bottom-nav"
 import { HomeFeed } from "./home-feed"
 import { ReelsView } from "./reels-view"
-import { AddView } from "./add-view"
+import { CreatePostModal } from "./create-post-modal"
 import { ChatView } from "./chat-view"
 import { ProfileView } from "./profile-view"
 import { PublicProfileView } from "./public-profile-view"
@@ -27,7 +27,7 @@ import type { TabKey } from "./types"
 const titles: Record<TabKey, string> = {
   home: "سديم",
   reels: "ريلز",
-  add: "إنشاء",
+
   chat: "المحادثات",
   profile: "الملف الشخصي",
   notifications: "الإشعارات",
@@ -43,7 +43,8 @@ function AppShellContent() {
   const loadingAuth = status === "loading"
   const user = session?.user || null
   const [isSingleChatOpen, setIsSingleChatOpen] = useState(false)
-  const { selectedUserId, setSelectedUserId } = useNavigation()
+  const { selectedUserId, setSelectedUserId, setShowCreatePost, showCreatePost } = useNavigation()
+  const [isUploadingReel, setIsUploadingReel] = useState(false)
   const isReels = active === "reels"
 
   const [backPressCount, setBackPressCount] = useState(0)
@@ -155,9 +156,59 @@ function AppShellContent() {
           </motion.div>
           {active === "home" && (
             <div className="flex items-center gap-4">
-              <button onClick={() => setActive("add")} className="rounded-full p-1 hover:bg-secondary transition-colors">
+                            <button onClick={() => setShowCreatePost(true)} className="rounded-full p-1 hover:bg-secondary transition-colors">
                 <PlusSquare className="size-6" />
               </button>
+              <label className="rounded-full p-1 hover:bg-secondary transition-colors cursor-pointer relative">
+                <input
+                  type="file"
+                  accept="video/*"
+                  className="hidden"
+                  disabled={isUploadingReel}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+
+                    if (file.size > 20 * 1024 * 1024) {
+                      toast.error("حجم الفيديو يجب أن يكون أقل من 20 ميجابايت");
+                      return;
+                    }
+
+                    setIsUploadingReel(true);
+                    const toastId = toast.loading("جاري رفع الريلز...");
+
+                    try {
+                      const formData = new FormData();
+                      formData.append('file', file);
+
+                      const uploadRes = await fetch('/api/upload', {
+                        method: 'POST',
+                        body: formData
+                      });
+                      const uploadData = await uploadRes.json();
+
+                      if (!uploadData.success) throw new Error("فشل في رفع الملف");
+
+                      const { createPost } = await import("@/app/actions/post");
+                      const res = await createPost({
+                        caption: "",
+                        mediaUrl: uploadData.url,
+                        mediaType: "REEL"
+                      });
+
+                      if (!res.success) throw new Error(res.error || "فشل حفظ الريلز");
+
+                      toast.success("تم رفع الريلز بنجاح", { id: toastId });
+                    } catch (err: any) {
+                      toast.error(err.message || "حدث خطأ أثناء الرفع", { id: toastId });
+                    } finally {
+                      setIsUploadingReel(false);
+                      e.target.value = "";
+                    }
+                  }}
+                />
+                {isUploadingReel ? <Loader2 className="size-6 animate-spin" /> : <Clapperboard className="size-6" />}
+              </label>
               <button onClick={() => setActive("notifications")} className="rounded-full p-1 hover:bg-secondary transition-colors">
                 <Heart className="size-6" />
               </button>
@@ -181,7 +232,7 @@ function AppShellContent() {
             >
               {active === "home" && <HomeFeed />}
               {active === "reels" && <ReelsView />}
-              {active === "add" && <AddView />}
+
               {active === "chat" && <ChatView onChatOpenStateChange={setIsSingleChatOpen} />}
               {active === "profile" && <ProfileView />}
               {active === "notifications" && <NotificationsView />}
@@ -218,6 +269,7 @@ export function AppShell() {
   return (
     <NavigationProvider>
       <AppShellContent />
+      <CreatePostModal />
     </NavigationProvider>
   )
 }

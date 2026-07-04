@@ -10,6 +10,8 @@ interface NavigationContextType {
   setStoryViewerData: (data: { stories: any[]; initialIndex: number } | null) => void
   showStoryUpload: boolean
   setShowStoryUpload: (show: boolean) => void
+  showCreatePost: boolean
+  setShowCreatePost: (show: boolean) => void
 }
 
 const NavigationContext = createContext<NavigationContextType | undefined>(undefined)
@@ -18,6 +20,7 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
   const [selectedUserId, setSelectedUserIdState] = useState<string | null>(null)
   const [storyViewerData, setStoryViewerData] = useState<{ stories: any[]; initialIndex: number } | null>(null)
   const [showStoryUpload, setShowStoryUpload] = useState<boolean>(false)
+  const [showCreatePost, setShowCreatePost] = useState<boolean>(false)
   const { data: session } = useSession()
 
   const setSelectedUserId = (id: string | null) => {
@@ -33,7 +36,8 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
     <NavigationContext.Provider value={{
       selectedUserId, setSelectedUserId,
       storyViewerData, setStoryViewerData,
-      showStoryUpload, setShowStoryUpload
+      showStoryUpload, setShowStoryUpload,
+      showCreatePost, setShowCreatePost
     }}>
       {children}
     </NavigationContext.Provider>
