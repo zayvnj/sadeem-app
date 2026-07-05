@@ -268,7 +268,7 @@ export function ProfileView() {
   const bio = profile?.bio || "لا يوجد بايو حتى الآن"
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto pb-20 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden bg-background">
+    <div className="flex h-full flex-col overflow-y-auto pb-20 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden bg-background" dir="rtl">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 sticky top-0 bg-background/80 backdrop-blur-md z-10 border-b border-border">
         <span className="font-bold text-lg flex items-center gap-1">
@@ -411,7 +411,7 @@ export function ProfileView() {
 
       {profile?.isProfessional && (
         <div className="px-4 py-2 mt-2">
-          <div className="bg-secondary/60 rounded-xl p-3 cursor-pointer hover:bg-secondary transition-colors border border-border/50">
+          <div className="bg-secondary/60 rounded-2xl backdrop-blur-xl border border-white/10 shadow-[0_0_15px_rgba(124,58,237,0.1)] p-3 cursor-pointer hover:bg-secondary transition-colors">
             <div className="flex items-center justify-between mb-1">
               <span className="text-sm font-bold flex items-center gap-2">
                 <BarChart3 className="size-4 text-blue-500" />
@@ -560,14 +560,14 @@ export function ProfileView() {
       </div>
 
       {/* Grid */}
-      <motion.div variants={container} initial="hidden" animate="show" className="grid grid-cols-3 gap-0.5 p-0.5 min-h-[300px]">
+      <motion.div variants={container} initial="hidden" animate="show" className="grid grid-cols-3 gap-1.5 p-1.5 min-h-[300px]">
         {activeTab === "grid" && (
           posts.length > 0 ? (
             posts.map((post) => (
               <motion.div
                 key={post.id}
                 variants={item}
-                className="aspect-square bg-gradient-to-br from-muted to-secondary border border-border overflow-hidden"
+                className="aspect-[4/5] rounded-2xl group relative cursor-pointer hover:scale-[0.98] transition-all duration-300 bg-gradient-to-br from-muted to-secondary border border-border/50 overflow-hidden shadow-sm hover:shadow-xl hover:border-foreground/20"
               >
                 {post.media_url && (
                   post.media_url.match(/\.(mp4|webm|ogg)$/i) ? (
@@ -604,7 +604,7 @@ export function ProfileView() {
               <motion.div
                 key={post.id}
                 variants={item}
-                className="aspect-square bg-gradient-to-br from-muted to-secondary border border-border overflow-hidden"
+                className="aspect-[4/5] rounded-2xl group relative cursor-pointer hover:scale-[0.98] transition-all duration-300 bg-gradient-to-br from-muted to-secondary border border-border/50 overflow-hidden shadow-sm hover:shadow-xl hover:border-foreground/20"
               >
                 {post.media_url && (
                   post.media_url.match(/\.(mp4|webm|ogg)$/i) ? (
