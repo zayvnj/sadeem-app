@@ -61,6 +61,10 @@ export function ProfileView() {
   const [editError, setEditError] = useState("")
   const [loading, setLoading] = useState(true)
 
+  const [coverPreview, setCoverPreview] = useState<string | null>(null)
+  const [isUploadingCover, setIsUploadingCover] = useState(false)
+  const coverInputRef = useRef<HTMLInputElement>(null)
+
   const [stats, setStats] = useState([
     { label: "منشور", value: 0 },
     { label: "متابِع", value: 0 },
@@ -126,6 +130,7 @@ export function ProfileView() {
   // Populate edit form when sheet opens
   useEffect(() => {
     if (isEditSheetOpen) {
+      setCoverPreview(profile?.coverImage || null)
       const defaultUsername = currentUser?.email?.split('@')[0] || "مستخدم_سديم"
       setEditFullName(profile?.fullName || profile?.full_name || "")
       setEditUsername(profile?.username || defaultUsername)
@@ -152,6 +157,30 @@ export function ProfileView() {
     setEditAvatarPreview(null)
     setEditAvatarRemoved(true)
     if (fileInputRef.current) fileInputRef.current.value = ""
+  }
+
+  const handleCoverChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      try {
+        const compressed = await compressImage(file)
+        const previewUrl = URL.createObjectURL(compressed)
+        setCoverPreview(previewUrl)
+        setIsUploadingCover(true)
+
+        // Mock upload delay
+        await new Promise(resolve => setTimeout(resolve, 1500))
+
+        // In reality we would hit an upload API and then updateUserProfile
+        // For now, update local profile state
+        setProfile((prev: any) => prev ? { ...prev, coverImage: previewUrl } : prev)
+        toast.success("تم تحديث صورة الغلاف بنجاح")
+      } catch (error) {
+        toast.error("حدث خطأ أثناء تغيير صورة الغلاف")
+      } finally {
+        setIsUploadingCover(false)
+      }
+    }
   }
 
   const handleSaveProfile = async () => {
@@ -277,15 +306,34 @@ export function ProfileView() {
 
       {/* Parallax Cover Image Area */}
       <div className="absolute top-0 left-0 right-0 h-48 overflow-hidden z-0 pointer-events-none">
-        <motion.div style={{ y: coverY }} className="w-full h-full">
-          {profile?.coverImage ? (
-            <img src={profile.coverImage} alt="Cover" className="w-full h-full object-cover" />
+        <motion.div style={{ y: coverY }} className="w-full h-full relative">
+          {coverPreview ? (
+            <img src={coverPreview} alt="Cover" className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full bg-gradient-to-br from-indigo-900 via-purple-900 to-black opacity-80" />
           )}
         </motion.div>
         {/* Dynamic Gradient Mask */}
         <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-background to-transparent" />
+      </div>
+
+      {/* Edit Cover Button - pointer events auto so it can be clicked */}
+      <div className="absolute top-36 left-4 z-10">
+        <button
+          onClick={() => coverInputRef.current?.click()}
+          disabled={isUploadingCover}
+          className="flex items-center justify-center p-2 rounded-full bg-background/30 hover:bg-background/50 backdrop-blur-md border border-white/20 shadow-lg transition-all text-white active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+          title="تغيير الغلاف"
+        >
+          {isUploadingCover ? <Loader2 className="size-5 animate-spin" /> : <Camera className="size-5" />}
+        </button>
+        <input
+          type="file"
+          ref={coverInputRef}
+          className="hidden"
+          accept="image/*"
+          onChange={handleCoverChange}
+        />
       </div>
 
       {/* Header */}
