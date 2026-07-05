@@ -23,6 +23,8 @@ model User {
   isOnline   Boolean  @default(false)
   role       String   @default("USER")
   isVerified Boolean  @default(false)
+  isProfessional Boolean @default(false)
+  professionalCategory String?
   lastActive DateTime @default(now())
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

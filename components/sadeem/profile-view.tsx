@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { motion } from "framer-motion"
-import { Settings, Grid3x3, Film, Bookmark, Bell, Moon, Shield, LogOut, Loader2, User, Camera, Trash2, BadgeCheck, X, ChevronLeft, UserX } from "lucide-react"
+import { Settings, Grid3x3, Film, Bookmark, Bell, Moon, Shield, LogOut, Loader2, User, Camera, Trash2, BadgeCheck, X, ChevronLeft, UserX, BarChart3, TrendingUp, Users, Eye } from "lucide-react"
 import { useSession, signOut } from "next-auth/react"
 import { getUserProfile, updateUserProfile, getUserPosts, deleteUserAccount, getSavedPosts } from "@/app/actions/user"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
@@ -409,10 +409,39 @@ export function ProfileView() {
         </p>
       </div>
 
+      {profile?.isProfessional && (
+        <div className="px-4 py-2 mt-2">
+          <div className="bg-secondary/60 rounded-xl p-3 cursor-pointer hover:bg-secondary transition-colors border border-border/50">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-sm font-bold flex items-center gap-2">
+                <BarChart3 className="size-4 text-blue-500" />
+                لوحة التحكم الاحترافية
+              </span>
+              <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                {profile.professionalCategory || "منشئ محتوى"}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
+              تم الوصول إلى 4.2 ألف حساب في آخر 30 يوماً. اضغط لعرض المزيد من الرؤى والأدوات.
+            </p>
+            <div className="flex gap-4">
+               <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                  <TrendingUp className="size-3.5 text-green-500" />
+                  +12% تفاعل
+               </div>
+               <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                  <Users className="size-3.5 text-blue-500" />
+                  +45 متابع
+               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex gap-2 px-4 py-4">
         <Sheet open={isEditSheetOpen} onOpenChange={setIsEditSheetOpen}>
           <SheetTrigger asChild>
-            <button className="flex-1 rounded-lg bg-foreground py-2 text-sm font-semibold text-background hover:opacity-90 active:scale-95 transition-all">
+            <button className="flex-1 rounded-lg bg-secondary py-2 text-sm font-semibold text-foreground hover:bg-secondary/80 active:scale-95 transition-all border border-border/50">
               تعديل الملف
             </button>
           </SheetTrigger>
@@ -506,7 +535,7 @@ export function ProfileView() {
         </Sheet>
 
         <button
-          className="flex-1 rounded-lg border border-border py-2 text-sm font-semibold hover:bg-secondary active:scale-95 transition-all"
+          className="flex-1 rounded-lg bg-secondary py-2 text-sm font-semibold text-foreground hover:bg-secondary/80 active:scale-95 transition-all border border-border/50"
           onClick={() => {
              navigator.clipboard.writeText(window.location.href)
                .then(() => toast.success("تم نسخ رابط الملف الشخصي!"))
@@ -550,8 +579,17 @@ export function ProfileView() {
               </motion.div>
             ))
           ) : (
-            <div className="col-span-3 flex items-center justify-center text-sm text-muted-foreground py-10">
-              لا توجد منشورات حتى الآن
+            <div className="col-span-3 flex flex-col items-center justify-center text-sm text-muted-foreground py-16 gap-4 px-8 text-center">
+              <div className="size-20 rounded-full border-2 border-foreground flex items-center justify-center mb-2">
+                 <Camera className="size-10 text-foreground" />
+              </div>
+              <h3 className="text-xl font-bold text-foreground">لا توجد منشورات</h3>
+              <p className="text-muted-foreground/80 leading-relaxed text-sm">
+                 عندما تشارك صوراً ومقاطع فيديو، ستظهر على ملفك الشخصي هنا.
+              </p>
+              <button className="text-blue-500 font-bold mt-2 hover:text-blue-600 transition-colors">
+                مشاركة أول منشور
+              </button>
             </div>
           )
         )}
@@ -586,8 +624,14 @@ export function ProfileView() {
         )}
 
         {activeTab === "reels" && (
-          <div className="col-span-3 flex items-center justify-center text-sm text-muted-foreground py-10">
-            مقاطع ريلز قريباً
+          <div className="col-span-3 flex flex-col items-center justify-center text-sm text-muted-foreground py-16 gap-4 px-8 text-center">
+            <div className="size-20 rounded-full border-2 border-foreground flex items-center justify-center mb-2">
+               <Film className="size-10 text-foreground" />
+            </div>
+            <h3 className="text-xl font-bold text-foreground">مقاطع ريلز</h3>
+            <p className="text-muted-foreground/80 leading-relaxed text-sm">
+               شارك لحظاتك الممتعة عبر مقاطع فيديو قصيرة.
+            </p>
           </div>
         )}
       </motion.div>
