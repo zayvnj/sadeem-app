@@ -11,7 +11,7 @@ import { updateLastActive } from "@/app/actions/user"
 import { BottomNav } from "./bottom-nav"
 import { HomeFeed } from "./home-feed"
 import { ReelsView } from "./reels-view"
-import { CreatePostModal } from "./create-post-modal"
+import { MediaStudio } from "./media-studio"
 import { ChatView } from "./chat-view"
 import { ProfileView } from "./profile-view"
 import { PublicProfileView } from "./public-profile-view"
@@ -135,23 +135,24 @@ function AppShellContent() {
           isReels ? "bg-black sm:border-black" : "bg-background sm:border-foreground"
         }`}
       >
-        {/* Header */}
-        <header
-          className={`flex shrink-0 items-center justify-between px-4 py-3 transition-colors duration-300 relative ${
-            isReels ? "bg-black text-white" : "bg-background text-foreground"
-          }`}
-        >
-          {/* Header Left - Messages */}
-          <div className="flex-1">
-            <button onClick={() => setActive("chat")} className="rounded-full p-1 hover:bg-secondary transition-colors">
-              <Send className="size-6" />
-            </button>
-          </div>
+        {/* Header - Only visible on Home feed */}
+        {active === "home" && (
+          <header
+            className={`flex shrink-0 items-center justify-between px-4 py-3 transition-colors duration-300 relative ${
+              isReels ? "bg-black text-white" : "bg-background text-foreground"
+            }`}
+          >
+            {/* Header Left - Messages */}
+            <div className="flex-1">
+              <button onClick={() => setActive("chat")} className="rounded-full p-1 hover:bg-secondary transition-colors">
+                <Send className="size-6" />
+              </button>
+            </div>
 
-          {/* Header Center - Logo */}
-          <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none">
-            <Logo className="text-3xl" />
-          </div>
+            {/* Header Center - Logo */}
+            <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none">
+              <Logo className="text-3xl" />
+            </div>
 
           {/* Header Right - Notifications */}
           <div className="flex-1 flex justify-end gap-2 items-center">
@@ -161,6 +162,14 @@ function AppShellContent() {
             </button>
           </div>
         </header>
+            {/* Header Right - Notifications */}
+            <div className="flex-1 flex justify-end gap-2">
+              <button onClick={() => setActive("notifications")} className="rounded-full p-1 hover:bg-secondary transition-colors">
+                <Heart className="size-6" />
+              </button>
+            </div>
+          </header>
+        )}
 
         {/* Content */}
         <main className="relative flex-1 overflow-hidden">
@@ -212,7 +221,7 @@ export function AppShell() {
   return (
     <NavigationProvider>
       <AppShellContent />
-      <CreatePostModal />
+      <MediaStudio />
     </NavigationProvider>
   )
 }
