@@ -75,11 +75,16 @@ export function ProfileView() {
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const [mounted, setMounted] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const { scrollY } = useScroll({ container: containerRef })
   const coverY = useTransform(scrollY, [0, 200], [0, 80])
 
   const { data: session } = useSession()
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
   const currentUser = session?.user
 
   useEffect(() => {
@@ -306,23 +311,33 @@ export function ProfileView() {
 
       {/* Parallax Cover Image Area */}
       <div className="absolute top-0 left-0 right-0 h-48 overflow-hidden z-0 pointer-events-none">
-        <motion.div style={{ y: coverY }} className="w-full h-full relative">
-          {coverPreview ? (
-            <img src={coverPreview} alt="Cover" className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full bg-gradient-to-br from-indigo-900 via-purple-900 to-black opacity-80" />
-          )}
-        </motion.div>
+        {mounted ? (
+          <motion.div style={{ y: coverY }} className="w-full h-full relative">
+            {coverPreview ? (
+              <img src={coverPreview} alt="Cover" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-indigo-900 via-purple-900 to-black opacity-80" />
+            )}
+          </motion.div>
+        ) : (
+          <div className="w-full h-full relative">
+            {coverPreview ? (
+              <img src={coverPreview} alt="Cover" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-indigo-900 via-purple-900 to-black opacity-80" />
+            )}
+          </div>
+        )}
         {/* Dynamic Gradient Mask */}
         <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-background to-transparent" />
       </div>
 
       {/* Edit Cover Button - pointer events auto so it can be clicked */}
-      <div className="absolute top-36 left-4 z-10">
+      <div className="absolute top-[120px] left-4 z-20 pointer-events-auto">
         <button
           onClick={() => coverInputRef.current?.click()}
           disabled={isUploadingCover}
-          className="flex items-center justify-center p-2 rounded-full bg-background/30 hover:bg-background/50 backdrop-blur-md border border-white/20 shadow-lg transition-all text-white active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center justify-center p-2 rounded-full bg-background/30 hover:bg-background/50 backdrop-blur-md border border-white/20 shadow-lg transition-all text-white active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           title="تغيير الغلاف"
         >
           {isUploadingCover ? <Loader2 className="size-5 animate-spin" /> : <Camera className="size-5" />}

@@ -38,11 +38,13 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
   const currentUser = session?.user
   const queryClient = useQueryClient()
 
+  const [mounted, setMounted] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const { scrollY } = useScroll({ container: containerRef })
   const coverY = useTransform(scrollY, [0, 200], [0, 80])
 
   useEffect(() => {
+    setMounted(true)
     const fetchProfileData = async () => {
       try {
         setLoading(true)
@@ -173,13 +175,23 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
 
         {/* Parallax Cover Image Area */}
         <div className="absolute top-0 left-0 right-0 h-48 overflow-hidden z-0 pointer-events-none">
-          <motion.div style={{ y: coverY }} className="w-full h-full">
-            {profile?.coverImage ? (
-              <img src={profile.coverImage} alt="Cover" className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full bg-gradient-to-br from-indigo-900 via-purple-900 to-black opacity-80" />
-            )}
-          </motion.div>
+          {mounted ? (
+            <motion.div style={{ y: coverY }} className="w-full h-full">
+              {profile?.coverImage ? (
+                <img src={profile.coverImage} alt="Cover" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-indigo-900 via-purple-900 to-black opacity-80" />
+              )}
+            </motion.div>
+          ) : (
+            <div className="w-full h-full">
+              {profile?.coverImage ? (
+                <img src={profile.coverImage} alt="Cover" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-indigo-900 via-purple-900 to-black opacity-80" />
+              )}
+            </div>
+          )}
           {/* Dynamic Gradient Mask */}
           <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-background to-transparent" />
         </div>

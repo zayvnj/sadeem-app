@@ -122,7 +122,7 @@ export function StoryViewer({ stories, initialStoryIndex = 0, onClose, onComplet
   const [isDeleting, setIsDeleting] = useState(false)
   const [showViewers, setShowViewers] = useState(false)
   const [viewers, setViewers] = useState<any[]>([])
-  const isOwner = currentUser?.id === currentStory?.user_id
+  const isOwner = currentUser?.id === currentStory?.user_id || currentUser?.id === (currentStory as any)?.userId
 
   useEffect(() => {
     if (isOwner && currentStory) {
@@ -165,9 +165,16 @@ export function StoryViewer({ stories, initialStoryIndex = 0, onClose, onComplet
 
     setIsSending(true)
     try {
+      const targetUserId = currentStory.user_id || (currentStory as any).userId
+      if (!targetUserId) {
+        toast.error("حدث خطأ: لا يمكن العثور على صاحب القصة")
+        setIsSending(false)
+        return
+      }
+
       const enrichedText = `[REPLY|${currentStory.id}|${currentStory.users?.fullName || currentStory.users?.full_name || 'Story'}|${currentStory.media_url}] ${replyText}`
 
-      const res = await sendMessage(currentStory.user_id, enrichedText)
+      const res = await sendMessage(targetUserId, enrichedText)
       if (!res.success) throw new Error(res.error)
 
       toast.success("تم إرسال الرد")
