@@ -33,6 +33,16 @@ export async function getStories() {
       orderBy: { createdAt: 'asc' } // Oldest first within a user's group
     });
 
+    // Fetch views for these stories by the current user
+    const storyIds = activeStories.map(s => s.id);
+    const viewedStories = await prisma.storyView.findMany({
+      where: {
+        userId: userId,
+        storyId: { in: storyIds }
+      }
+    });
+    const viewedStoryIds = new Set(viewedStories.map(v => v.storyId));
+
     // Group stories by user
     const groupedStories = activeStories.reduce((acc: any, story) => {
       if (!acc[story.userId]) {
@@ -40,14 +50,21 @@ export async function getStories() {
           id: story.userId, // Group ID is user ID
           user: story.user,
           stories: [],
-          hasUnseen: true // Simplified: Assume true for now unless we implement seen tracking
+          hasUnseen: false // Will be determined by individual stories
         };
       }
+
+      const isViewed = viewedStoryIds.has(story.id);
+      if (!isViewed) {
+        acc[story.userId].hasUnseen = true;
+      }
+
       acc[story.userId].stories.push({
         id: story.id,
         mediaUrl: story.mediaUrl,
         createdAt: story.createdAt,
-        expiresAt: story.expiresAt
+        expiresAt: story.expiresAt,
+        isViewed: isViewed
       });
       return acc;
     }, {});
@@ -81,5 +98,76 @@ export async function createStory(mediaUrl: string) {
   } catch (error) {
     console.error('Error creating story:', error);
     return { success: false, error: 'Failed to create story' };
+  }
+}
+
+export async function markStoryAsViewed(storyId: string) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) return { success: false, error: 'Unauthorized' };
+
+    await prisma.storyView.upsert({
+      where: {
+        userId_storyId: {
+          userId: session.user.id,
+          storyId
+        }
+      },
+      update: {},
+      create: {
+        userId: session.user.id,
+        storyId
+      }
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error marking story as viewed:', error);
+    return { success: false, error: 'Failed to mark story as viewed' };
+  }
+}
+
+export async function getStoryViewers(storyId: string) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) return { success: false, error: 'Unauthorized' };
+
+    const views = await prisma.storyView.findMany({
+      where: { storyId },
+      include: {
+        user: {
+          select: { id: true, username: true, fullName: true, avatarUrl: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    return { success: true, data: views };
+  } catch (error) {
+    console.error('Error fetching story viewers:', error);
+    return { success: false, error: 'Failed to fetch viewers' };
+  }
+}
+
+export async function deleteStory(storyId: string) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) return { success: false, error: 'Unauthorized' };
+
+    const story = await prisma.story.findUnique({
+      where: { id: storyId }
+    });
+
+    if (!story) return { success: false, error: 'Story not found' };
+    if (story.userId !== session.user.id) return { success: false, error: 'Unauthorized to delete this story' };
+
+    await prisma.story.delete({
+      where: { id: storyId }
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting story:', error);
+    return { success: false, error: 'Failed to delete story' };
   }
 }

@@ -316,6 +316,12 @@ export function HomeFeed() {
 
   return (
     <div className="pb-4 h-full relative overflow-hidden flex flex-col">
+      <StoryUpload
+        onUploadComplete={() => {
+          queryClient.invalidateQueries({ queryKey: ['feed', 'stories'] })
+        }}
+        userAvatar={currentUserAvatar}
+      />
       <FullScreenImageViewer
         imageUrl={activeLightboxImage}
         onClose={() => setActiveLightboxImage(null)}
@@ -356,11 +362,14 @@ export function HomeFeed() {
         )}
       </AnimatePresence>
 
-      {/* Pull to refresh indicator */}
+      {/* Pull to refresh indicator - Moved z-index logic so it doesn't block interactions when idle */}
       <motion.div
-        className="absolute top-0 left-0 right-0 flex justify-center z-10 pointer-events-none"
+        className={`absolute top-0 left-0 right-0 flex justify-center pointer-events-none ${
+          isRefreshing || dragY > 0 ? 'z-50 opacity-100' : '-z-10 opacity-0'
+        }`}
         animate={{ y: isRefreshing ? 20 : (dragY > 0 ? Math.max(0, dragY - 40) : -40) }}
         initial={{ y: -40 }}
+        transition={{ type: "spring", stiffness: 300, damping: 30 }}
       >
         <div className="bg-background shadow-md rounded-full p-2 mt-4">
           <Loader2 className={`size-6 text-primary ${isRefreshing ? 'animate-spin' : ''}`} style={{ transform: `rotate(${dragY * 2}deg)` }} />
@@ -392,6 +401,7 @@ export function HomeFeed() {
           }
         }}
         animate={{ y: isRefreshing ? 60 : 0 }}
+        transition={{ type: "spring", stiffness: 300, damping: 30 }}
       >
 
       {/* Stories horizontal scroll */}
@@ -410,7 +420,7 @@ export function HomeFeed() {
                 )}
               </div>
               <div
-                className="absolute -bottom-1 -right-1 flex size-6 items-center justify-center rounded-full bg-foreground text-background shadow-sm border-2 border-background cursor-pointer"
+                className="absolute -bottom-1 -right-1 flex size-6 items-center justify-center rounded-full bg-foreground text-background shadow-sm border-2 border-background cursor-pointer z-20 pointer-events-auto"
                 onClick={(e) => {
                   e.stopPropagation();
                   setShowStoryUpload(true);
@@ -422,15 +432,21 @@ export function HomeFeed() {
             <span className="text-xs font-bold text-foreground">أنت</span>
           </button>
 
-          {stories.map((userStories: any, i: number) => {
-            const firstStory = userStories[0]
-            const user = firstStory.users
-            const hasUnseen = userStories.some((s: any) => !viewedStoryIds.has(s.id))
+          {stories.map((userGroup: any, i: number) => {
+            const firstStory = userGroup.stories?.[0] || userGroup[0] // handle potential nested structure
+            if (!firstStory) return null;
+
+            const user = userGroup.user || firstStory.users
+
+            // Check both local seen state and backend state
+            const hasUnseen = userGroup.hasUnseen !== undefined
+              ? userGroup.hasUnseen && !userGroup.stories.every((s:any) => viewedStoryIds.has(s.id))
+              : userGroup.some((s: any) => !viewedStoryIds.has(s.id))
 
             return (
               <button
                 key={i}
-                onClick={() => handleAvatarTap(firstStory.user_id)}
+                onClick={() => handleAvatarTap(userGroup.id || firstStory.user_id)}
                 className="flex flex-col items-center gap-2 shrink-0 group w-[72px]"
               >
                 <div
