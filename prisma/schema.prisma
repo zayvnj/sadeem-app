@@ -30,6 +30,7 @@ model User {
   // العلاقات
   posts         Post[]
   stories       Story[]
+  storyViews    StoryView[]
   comments      Comment[]
   likes         Like[]
   savedPosts    SavedPost[]
@@ -95,6 +96,22 @@ model Story {
 
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  views     StoryView[]
+}
+
+// جدول مشاهدات القصص
+model StoryView {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  storyId   String
+  story     Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, storyId]) // يمنع تسجيل مشاهدة نفس القصة أكثر من مرة لنفس المستخدم
 }
 
 // جدول التعليقات

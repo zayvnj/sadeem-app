@@ -2,10 +2,12 @@
 
 import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Send } from "lucide-react"
+import { X, Send, Trash2, Eye } from "lucide-react"
 import { useSession } from "next-auth/react"
 import { sendMessage } from "@/app/actions/chat"
+import { markStoryAsViewed, deleteStory, getStoryViewers } from "@/app/actions/story"
 import { toast } from "sonner"
+import { useQueryClient } from "@tanstack/react-query"
 
 interface Story {
   id: string
@@ -38,6 +40,15 @@ export function StoryViewer({ stories, initialStoryIndex = 0, onClose, onComplet
   const progressRef = useRef<NodeJS.Timeout | null>(null)
 
   const currentStory = stories[currentIndex]
+  const queryClient = useQueryClient()
+
+  useEffect(() => {
+    if (currentStory) {
+      markStoryAsViewed(currentStory.id).then(() => {
+        queryClient.invalidateQueries({ queryKey: ['feed', 'stories'] })
+      }).catch(console.error)
+    }
+  }, [currentStory, queryClient])
 
   const handleNext = () => {
     if (currentIndex < stories.length - 1) {
@@ -107,6 +118,41 @@ export function StoryViewer({ stories, initialStoryIndex = 0, onClose, onComplet
 
   const { data: session } = useSession()
   const currentUser = session?.user
+
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [showViewers, setShowViewers] = useState(false)
+  const [viewers, setViewers] = useState<any[]>([])
+  const isOwner = currentUser?.id === currentStory?.user_id
+
+  useEffect(() => {
+    if (isOwner && currentStory) {
+      getStoryViewers(currentStory.id).then(res => {
+        if (res.success && res.data) {
+          setViewers(res.data)
+        }
+      })
+    }
+  }, [isOwner, currentStory])
+
+  const handleDelete = async () => {
+    if (confirm("هل أنت متأكد من حذف هذه القصة؟")) {
+      setIsDeleting(true)
+      try {
+        const res = await deleteStory(currentStory.id)
+        if (res.success) {
+          toast.success("تم حذف القصة")
+          queryClient.invalidateQueries({ queryKey: ['feed', 'stories'] })
+          handleNext()
+        } else {
+          toast.error("فشل في حذف القصة")
+        }
+      } catch (e) {
+        toast.error("حدث خطأ")
+      } finally {
+        setIsDeleting(false)
+      }
+    }
+  }
 
   const handleReply = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -205,10 +251,18 @@ export function StoryViewer({ stories, initialStoryIndex = 0, onClose, onComplet
       {/* Media Content */}
       <div
         className="flex-1 relative bg-zinc-900 flex items-center justify-center overflow-hidden"
-        onClick={handleTap}
-        onPointerDown={handlePointerDown}
-        onPointerUp={handlePointerUp}
-        onPointerLeave={handlePointerUp}
+        onClick={(e) => {
+          if (!showViewers) handleTap(e)
+        }}
+        onPointerDown={() => {
+          if (!showViewers) handlePointerDown()
+        }}
+        onPointerUp={() => {
+          if (!showViewers) handlePointerUp()
+        }}
+        onPointerLeave={() => {
+          if (!showViewers) handlePointerUp()
+        }}
       >
         <AnimatePresence mode="wait">
           <motion.div
@@ -234,35 +288,117 @@ export function StoryViewer({ stories, initialStoryIndex = 0, onClose, onComplet
         </AnimatePresence>
       </div>
 
-      {/* Reply Input */}
-      <div className="absolute bottom-0 inset-x-0 p-4 bg-gradient-to-t from-black/80 to-transparent z-20 safe-area-bottom">
-        <form onSubmit={handleReply} className="flex items-center gap-3 w-full max-w-md mx-auto">
-          <input
-            type="text"
-            value={replyText}
-            onChange={(e) => setReplyText(e.target.value)}
-            placeholder="إرسال رسالة..."
-            onFocus={() => setIsPaused(true)}
-            onBlur={() => setIsPaused(false)}
-            className="flex-1 rounded-full border border-white/30 bg-black/40 px-5 py-3.5 text-sm text-white backdrop-blur-md outline-none placeholder:text-white/60 focus:border-white focus:bg-black/60 transition-all"
-            dir="auto"
-          />
-          <AnimatePresence>
-            {replyText.trim() && (
-               <motion.button
-                 initial={{ scale: 0, opacity: 0 }}
-                 animate={{ scale: 1, opacity: 1 }}
-                 exit={{ scale: 0, opacity: 0 }}
-                 type="submit"
-                 disabled={isSending}
-                 className="size-12 rounded-full bg-white flex items-center justify-center text-black shadow-lg disabled:opacity-50 shrink-0"
-               >
-                 {isSending ? <span className="size-5 border-2 border-black border-t-transparent rounded-full animate-spin" /> : <Send className="size-5 -ml-1" />}
-               </motion.button>
-            )}
-          </AnimatePresence>
-        </form>
+      {/* Footer (Reply Input or Owner Actions) */}
+      <div className="absolute bottom-0 inset-x-0 p-4 bg-gradient-to-t from-black/80 to-transparent z-20 safe-area-bottom flex flex-col justify-end pointer-events-none">
+        <div className="w-full max-w-md mx-auto pointer-events-auto">
+          {isOwner ? (
+            <div className="flex items-center justify-between gap-4 mt-auto">
+              <button
+                onClick={() => {
+                  setShowViewers(true);
+                  setIsPaused(true);
+                }}
+                className="flex items-center gap-2 text-white bg-black/40 px-4 py-2 rounded-full backdrop-blur-md hover:bg-black/60 transition-colors"
+              >
+                <Eye className="size-5" />
+                <span className="font-bold">{viewers.length}</span>
+              </button>
+
+              <button
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="flex items-center gap-2 text-red-500 bg-black/40 px-4 py-2 rounded-full backdrop-blur-md hover:bg-black/60 transition-colors disabled:opacity-50"
+              >
+                <Trash2 className="size-5" />
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleReply} className="flex items-center gap-3 w-full">
+              <input
+                type="text"
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                placeholder="إرسال رسالة..."
+                onFocus={() => setIsPaused(true)}
+                onBlur={() => setIsPaused(false)}
+                className="flex-1 rounded-full border border-white/30 bg-black/40 px-5 py-3.5 text-sm text-white backdrop-blur-md outline-none placeholder:text-white/60 focus:border-white focus:bg-black/60 transition-all"
+                dir="auto"
+              />
+              <AnimatePresence>
+                {replyText.trim() && (
+                  <motion.button
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0, opacity: 0 }}
+                    type="submit"
+                    disabled={isSending}
+                    className="size-12 rounded-full bg-white flex items-center justify-center text-black shadow-lg disabled:opacity-50 shrink-0"
+                  >
+                    {isSending ? <span className="size-5 border-2 border-black border-t-transparent rounded-full animate-spin" /> : <Send className="size-5 -ml-1" />}
+                  </motion.button>
+                )}
+              </AnimatePresence>
+            </form>
+          )}
+        </div>
       </div>
+
+      {/* Viewers Modal */}
+      <AnimatePresence>
+        {showViewers && (
+          <motion.div
+            initial={{ opacity: 0, y: "100%" }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: "100%" }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="absolute inset-x-0 bottom-0 top-1/3 bg-background rounded-t-3xl z-50 flex flex-col shadow-2xl border-t border-border"
+          >
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <h3 className="font-bold flex items-center gap-2">
+                <Eye className="size-5 text-muted-foreground" />
+                المشاهدات ({viewers.length})
+              </h3>
+              <button
+                onClick={() => {
+                  setShowViewers(false);
+                  setIsPaused(false);
+                }}
+                className="p-2 rounded-full bg-secondary hover:bg-secondary/80 transition-colors"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {viewers.length > 0 ? (
+                viewers.map((view) => (
+                  <div key={view.id} className="flex items-center gap-3">
+                    <div className="size-10 rounded-full bg-secondary overflow-hidden">
+                      {view.user.avatarUrl ? (
+                        <img src={view.user.avatarUrl} alt="" className="size-full object-cover" />
+                      ) : (
+                        <div className="size-full flex items-center justify-center font-bold">
+                          {(view.user.fullName || view.user.username).charAt(0)}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="font-bold text-sm leading-none">{view.user.fullName || view.user.username}</span>
+                      <span className="text-xs text-muted-foreground">@{view.user.username}</span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground mr-auto">
+                      {new Date(view.createdAt).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center text-muted-foreground py-8">
+                  لا توجد مشاهدات حتى الآن
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }
