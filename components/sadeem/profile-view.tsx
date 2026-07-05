@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { motion } from "framer-motion"
+import { motion, useScroll, useTransform } from "framer-motion"
 import { Settings, Grid3x3, Film, Bookmark, Bell, Moon, Shield, LogOut, Loader2, User, Camera, Trash2, BadgeCheck, X, ChevronLeft, UserX, BarChart3, TrendingUp, Users, Eye } from "lucide-react"
 import { useSession, signOut } from "next-auth/react"
 import { getUserProfile, updateUserProfile, getUserPosts, deleteUserAccount, getSavedPosts } from "@/app/actions/user"
@@ -23,6 +23,7 @@ import { compressImage } from "@/lib/utils"
 import { Preferences } from "@capacitor/preferences"
 import { useTheme } from "next-themes"
 import { useStoryNavigation } from "./story/useStoryNavigation"
+import { ThemeToggle } from "./theme-toggle"
 
 const tabs = [
   { icon: Grid3x3, key: "grid" },
@@ -69,6 +70,10 @@ export function ProfileView() {
   const { handleAvatarTap } = useStoryNavigation()
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const containerRef = useRef<HTMLDivElement>(null)
+  const { scrollY } = useScroll({ container: containerRef })
+  const coverY = useTransform(scrollY, [0, 200], [0, 80])
 
   const { data: session } = useSession()
   const currentUser = session?.user
@@ -268,21 +273,37 @@ export function ProfileView() {
   const bio = profile?.bio || "لا يوجد بايو حتى الآن"
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto pb-20 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden bg-background" dir="rtl">
+    <div ref={containerRef} className="flex h-full flex-col overflow-y-auto pb-20 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden bg-background relative" dir="rtl">
+
+      {/* Parallax Cover Image Area */}
+      <div className="absolute top-0 left-0 right-0 h-48 overflow-hidden z-0 pointer-events-none">
+        <motion.div style={{ y: coverY }} className="w-full h-full">
+          {profile?.coverImage ? (
+            <img src={profile.coverImage} alt="Cover" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-indigo-900 via-purple-900 to-black opacity-80" />
+          )}
+        </motion.div>
+        {/* Dynamic Gradient Mask */}
+        <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-background to-transparent" />
+      </div>
+
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 sticky top-0 bg-background/80 backdrop-blur-md z-10 border-b border-border">
-        <span className="font-bold text-lg flex items-center gap-1">
+      <div className="flex items-center justify-between px-4 py-3 sticky top-0 z-10">
+        <span className="font-bold text-lg flex items-center gap-1 drop-shadow-md">
           {username}
           {profile?.isVerified && <BadgeCheck className="size-4 text-blue-500" />}
         </span>
 
-        <Sheet>
-          <SheetTrigger asChild>
-            <button className="p-2 -mr-2 rounded-full hover:bg-secondary transition-colors">
-              <Settings className="size-6 text-foreground" />
-            </button>
-          </SheetTrigger>
-          <SheetContent side="bottom" className="h-[80vh] sm:h-[90vh] rounded-t-3xl border-t border-border overflow-y-auto" dir="rtl">
+        <div className="flex items-center gap-2">
+          <ThemeToggle className="drop-shadow-md bg-background/20 backdrop-blur-sm" />
+          <Sheet>
+            <SheetTrigger asChild>
+              <button className="p-2 -mr-2 rounded-full hover:bg-secondary/50 transition-colors drop-shadow-md bg-background/20 backdrop-blur-sm">
+                <Settings className="size-6 text-foreground" />
+              </button>
+            </SheetTrigger>
+            <SheetContent side="bottom" className="h-[80vh] sm:h-[90vh] rounded-t-3xl border-t border-border overflow-y-auto" dir="rtl">
             <SheetHeader className="mb-6">
               <SheetTitle className="text-center font-bold">الإعدادات</SheetTitle>
             </SheetHeader>
@@ -373,12 +394,13 @@ export function ProfileView() {
             </div>
           </SheetContent>
         </Sheet>
+        </div>
       </div>
 
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center gap-5 px-4 py-5"
+        className="flex items-center gap-5 px-4 py-5 relative z-10 mt-16"
       >
         <div
           className="rounded-full p-[3px] ring-2 ring-foreground shrink-0 cursor-pointer transition-transform active:scale-95"

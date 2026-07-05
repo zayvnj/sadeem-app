@@ -22,6 +22,7 @@ import { SearchView } from "./search-view"
 import { NavigationProvider, useNavigation } from "./navigation-context"
 import { Logo } from "./logo"
 import { GlobalLoadingScreen } from "./global-loading"
+import { ThemeToggle } from "./theme-toggle"
 import type { TabKey } from "./types"
 
 const titles: Record<TabKey, string> = {
@@ -153,7 +154,8 @@ function AppShellContent() {
           </div>
 
           {/* Header Right - Notifications */}
-          <div className="flex-1 flex justify-end gap-2">
+          <div className="flex-1 flex justify-end gap-2 items-center">
+            <ThemeToggle className="-ml-1" />
             <button onClick={() => setActive("notifications")} className="rounded-full p-1 hover:bg-secondary transition-colors">
               <Heart className="size-6" />
             </button>

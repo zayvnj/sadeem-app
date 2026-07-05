@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { motion } from "framer-motion"
+import { useState, useEffect, useRef } from "react"
+import { motion, useScroll, useTransform } from "framer-motion"
 import { ChevronRight, Grid3x3, Film, Loader2, Heart, ShieldAlert, ShieldCheck } from "lucide-react"
 import { toast } from "sonner"
 import { useSession } from "next-auth/react"
@@ -37,6 +37,10 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
   const { data: session } = useSession()
   const currentUser = session?.user
   const queryClient = useQueryClient()
+
+  const containerRef = useRef<HTMLDivElement>(null)
+  const { scrollY } = useScroll({ container: containerRef })
+  const coverY = useTransform(scrollY, [0, 200], [0, 80])
 
   useEffect(() => {
     const fetchProfileData = async () => {
@@ -163,29 +167,45 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
       transition={{ type: "spring", damping: 25, stiffness: 200 }}
       className="absolute inset-0 z-50 flex flex-col bg-background overflow-hidden" dir="rtl"
     >
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4 sticky top-0 bg-background/80 backdrop-blur-md z-10">
-        <div className="flex items-center gap-3">
-          <button onClick={onBack} className="p-2 -mr-2 rounded-full hover:bg-secondary transition-colors">
-            <ChevronRight className="size-6" />
-          </button>
-          <span className="font-bold flex items-center gap-1">
-            {username}
-            {isVerified && <VerifiedBadge />}
-          </span>
-        </div>
-        {(currentUser as any)?.role === 'ADMIN' && (
-          <button
-            onClick={handleToggleVerification}
-            className="p-2 -ml-2 rounded-full hover:bg-secondary transition-colors"
-            title={isVerified ? "إلغاء التوثيق" : "توثيق الحساب"}
-          >
-            {isVerified ? <ShieldAlert className="size-5 text-red-500" /> : <ShieldCheck className="size-5 text-blue-500" />}
-          </button>
-        )}
-      </header>
 
-      <div className="flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pb-20">
-        <div className="flex items-center gap-5 px-4 py-6">
+      {/* Scrollable Container with Parallax Cover inside */}
+      <div ref={containerRef} className="flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden relative">
+
+        {/* Parallax Cover Image Area */}
+        <div className="absolute top-0 left-0 right-0 h-48 overflow-hidden z-0 pointer-events-none">
+          <motion.div style={{ y: coverY }} className="w-full h-full">
+            {profile?.coverImage ? (
+              <img src={profile.coverImage} alt="Cover" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-indigo-900 via-purple-900 to-black opacity-80" />
+            )}
+          </motion.div>
+          {/* Dynamic Gradient Mask */}
+          <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-background to-transparent" />
+        </div>
+
+        <header className="flex h-14 shrink-0 items-center justify-between px-4 sticky top-0 z-10">
+          <div className="flex items-center gap-3">
+            <button onClick={onBack} className="p-2 -mr-2 rounded-full hover:bg-secondary/50 transition-colors drop-shadow-md bg-background/20 backdrop-blur-sm text-foreground">
+              <ChevronRight className="size-6" />
+            </button>
+            <span className="font-bold flex items-center gap-1 drop-shadow-md">
+              {username}
+              {isVerified && <VerifiedBadge />}
+            </span>
+          </div>
+          {(currentUser as any)?.role === 'ADMIN' && (
+            <button
+              onClick={handleToggleVerification}
+              className="p-2 -ml-2 rounded-full hover:bg-secondary/50 transition-colors drop-shadow-md bg-background/20 backdrop-blur-sm"
+              title={isVerified ? "إلغاء التوثيق" : "توثيق الحساب"}
+            >
+              {isVerified ? <ShieldAlert className="size-5 text-red-500" /> : <ShieldCheck className="size-5 text-blue-500" />}
+            </button>
+          )}
+        </header>
+
+        <div className="flex items-center gap-5 px-4 py-6 relative z-10 mt-16">
           <div className="relative">
             <div className="rounded-full p-[3px] ring-2 ring-border shrink-0">
               <div className="flex size-20 items-center justify-center rounded-full bg-secondary text-2xl font-bold text-foreground overflow-hidden">
@@ -278,6 +298,8 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
             </div>
           ))}
         </div>
+
+        <div className="h-20" /> {/* Padding for bottom */}
       </div>
     </motion.div>
   )
