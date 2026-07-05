@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Loader2, BadgeCheck, Play, Sparkles } from "lucide-react"
-import { useSession } from "next-auth/react"
+import { useSession } from "@/lib/auth-context"
 import { getFeedPosts, getReels, toggleLike } from "@/app/actions/post"
 import { getStories } from "@/app/actions/story"
 import { useNavigation } from "./navigation-context"

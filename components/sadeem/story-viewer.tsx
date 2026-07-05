@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { X, Send, Trash2, Eye } from "lucide-react"
-import { useSession } from "next-auth/react"
+import { useSession } from "@/lib/auth-context"
 import { sendMessage } from "@/app/actions/chat"
 import { markStoryAsViewed, deleteStory, getStoryViewers } from "@/app/actions/story"
 import { toast } from "sonner"

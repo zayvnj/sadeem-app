@@ -1,7 +1,7 @@
 'use server';
 
 import prisma from '@/lib/prisma';
-import { auth } from '@/auth';
+import { auth } from '@/lib/session';
 
 export async function findOrCreateChat(otherUserId: string) {
   try {

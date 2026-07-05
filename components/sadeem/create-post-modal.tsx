@@ -3,7 +3,7 @@
 import { useState, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { ImagePlus, Film, Loader2, X, Send } from "lucide-react"
-import { useSession } from "next-auth/react"
+import { useSession } from "@/lib/auth-context"
 import { createPost } from "@/app/actions/post"
 import { useNavigation } from "./navigation-context"
 import { toast } from "sonner"

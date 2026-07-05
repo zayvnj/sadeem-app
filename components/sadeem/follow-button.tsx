@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
-import { useSession } from "next-auth/react"
+import { useSession } from "@/lib/auth-context"
 import { toggleFollow } from "@/app/actions/user"
 import { useQueryClient, useMutation } from "@tanstack/react-query"
 

@@ -1,7 +1,7 @@
 "use client"
 
 import React, { createContext, useContext, useState, ReactNode } from "react"
-import { useSession } from "next-auth/react"
+import { useSession } from "@/lib/auth-context"
 
 interface NavigationContextType {
   selectedUserId: string | null
