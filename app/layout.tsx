@@ -3,7 +3,7 @@ import { Cairo } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 import { QueryProvider } from '@/lib/query-provider'
-import { SessionProvider } from 'next-auth/react'
+import { AuthProvider } from '@/lib/auth-context'
 import { Toaster } from '@/components/ui/sonner'
 import { ThemeProvider } from 'next-themes'
 
@@ -41,11 +41,11 @@ export default function RootLayout({
     <html lang="ar" dir="rtl" className={`bg-background ${cairo.variable}`} suppressHydrationWarning>
       <body className="font-sans antialiased">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <SessionProvider>
+          <AuthProvider>
             <QueryProvider>
               {children}
             </QueryProvider>
-          </SessionProvider>
+          </AuthProvider>
         </ThemeProvider>
         <Toaster position="bottom-center" />
         {process.env.NODE_ENV === 'production' && <Analytics />}

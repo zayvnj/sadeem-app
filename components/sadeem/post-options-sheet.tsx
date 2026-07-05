@@ -4,7 +4,7 @@ import { Loader2, Trash2, UserMinus, Flag, AlertCircle } from "lucide-react"
 import { deletePost } from "@/app/actions/post"
 import { toggleFollow } from "@/app/actions/user"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
-import { useSession } from "next-auth/react"
+import { useSession } from "@/lib/auth-context"
 import { toast } from "sonner"
 
 interface PostOptionsSheetProps {

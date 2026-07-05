@@ -1,6 +1,6 @@
 import { useStoriesStore } from '@/lib/stores/useStoriesStore'
 import { useNavigation } from '@/components/sadeem/navigation-context'
-import { useSession } from 'next-auth/react'
+import { useSession } from "@/lib/auth-context"
 
 export const useStoryNavigation = () => {
   const { setStoryViewerData, setShowStoryUpload } = useNavigation()

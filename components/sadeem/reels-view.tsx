@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Heart, MessageCircle, Send, Music2, Play, Volume2, VolumeX, Loader2, BadgeCheck, Film, PlusSquare, Clapperboard } from "lucide-react"
-import { useSession } from "next-auth/react"
+import { useSession } from "@/lib/auth-context"
 import { getReels, toggleLike, toggleSave } from "@/app/actions/post"
 import { useNavigation } from "./navigation-context"
 import { LikesSheet } from "./likes-sheet"

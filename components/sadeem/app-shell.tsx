@@ -6,7 +6,7 @@ import { Heart, Send, PlusSquare, Clapperboard, Loader2 } from "lucide-react"
 import { App } from '@capacitor/app'
 import { Capacitor } from '@capacitor/core'
 import { toast } from 'sonner'
-import { useSession } from "next-auth/react"
+import { useSession } from "@/lib/auth-context"
 import { updateLastActive } from "@/app/actions/user"
 import { BottomNav } from "./bottom-nav"
 import { HomeFeed } from "./home-feed"

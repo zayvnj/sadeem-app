@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import { Plus, Loader2, X } from "lucide-react"
-import { useSession } from "next-auth/react"
+import { useSession } from "@/lib/auth-context"
 import { createStory } from "@/app/actions/story"
 import { bwToast } from "./ui/bw-toast"
 import { motion, AnimatePresence } from "framer-motion"

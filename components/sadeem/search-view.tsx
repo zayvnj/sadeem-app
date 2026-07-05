@@ -8,7 +8,7 @@ import { getExploreFeed } from "@/app/actions/post"
 import { useNavigation } from "./navigation-context"
 import { VerifiedBadge } from "./verified-badge"
 import { useDebounce } from "use-debounce"
-import { useSession } from "next-auth/react"
+import { useSession } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
 
 export function SearchView() {
