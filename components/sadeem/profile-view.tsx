@@ -84,17 +84,18 @@ export function ProfileView() {
         if (profileRes.success && profileRes.data) {
           const profileData = profileRes.data
           setProfile(profileData)
-          setStats(prev => prev.map(s => {
-            if(s.label === "متابع") return { ...s, value: profileData.followersCount || 0 }
-            if(s.label === "يتابع") return { ...s, value: profileData.followingCount || 0 }
-            return s
-          }))
+          setStats([
+            { label: "منشور", value: profileData.postsCount || 0 },
+            { label: "متابِع", value: profileData.followersCount || 0 },
+            { label: "يتابع", value: profileData.followingCount || 0 },
+          ])
         }
 
         const postsRes = await getUserPosts(currentUser.id)
         if (postsRes.success && postsRes.data) {
           setPosts(postsRes.data as any)
-          setStats(prev => prev.map(s => s.label === "منشور" ? { ...s, value: postsRes.data.length } : s))
+          // Ensure posts count matches the actual returned rows if schema is stale
+          setStats(prev => prev.map(s => s.label === "منشور" ? { ...s, value: Math.max(s.value, postsRes.data.length) } : s))
         }
       } catch (error) {
         console.error('Error fetching profile data:', error)
@@ -587,8 +588,11 @@ export function ProfileView() {
               <p className="text-muted-foreground/80 leading-relaxed text-sm">
                  عندما تشارك صوراً ومقاطع فيديو، ستظهر على ملفك الشخصي هنا.
               </p>
-              <button className="text-blue-500 font-bold mt-2 hover:text-blue-600 transition-colors">
-                مشاركة أول منشور
+              <button
+                className="text-blue-500 font-bold mt-2 hover:text-blue-600 transition-colors active:scale-95 flex items-center gap-2"
+                onClick={() => window.dispatchEvent(new CustomEvent('switch-tab', { detail: 'create' }))}
+              >
+                أنشئ أول منشور لك
               </button>
             </div>
           )

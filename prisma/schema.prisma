@@ -25,6 +25,9 @@ model User {
   isVerified Boolean  @default(false)
   isProfessional Boolean @default(false)
   professionalCategory String?
+  followersCount Int @default(0)
+  followingCount Int @default(0)
+  postsCount Int @default(0)
   lastActive DateTime @default(now())
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

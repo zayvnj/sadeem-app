@@ -70,21 +70,26 @@ export async function getUserProfile(userId: string) {
         isVerified: true,
         isProfessional: true,
         professionalCategory: true,
+        followersCount: true,
+        followingCount: true,
+        postsCount: true,
         lastActive: true,
         _count: {
-          select: { followers: true, following: true }
+          select: { followers: true, following: true, posts: true }
         }
       }
     });
 
     if (!user) return { success: false, error: 'User not found' };
 
+    // Return the cached counters, but fallback to the relation counts if they are empty
     return {
       success: true,
       data: {
         ...user,
-        followersCount: user._count.followers,
-        followingCount: user._count.following,
+        followersCount: user.followersCount || user._count.followers,
+        followingCount: user.followingCount || user._count.following,
+        postsCount: user.postsCount || user._count.posts,
       }
     };
   } catch (error) {
