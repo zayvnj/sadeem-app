@@ -34,7 +34,7 @@ const item = {
 
 export function HomeFeed() {
   const [viewedStoryIds, setViewedStoryIds] = useState<Set<string>>(new Set())
-  const { setSelectedUserId, storyViewerData, setStoryViewerData, setShowStoryUpload } = useNavigation()
+  const { setSelectedUserId, storyViewerData, setStoryViewerData, setShowStoryUpload, setShowMediaStudio } = useNavigation()
 
   const { data: session } = useSession()
   const currentUser = session?.user
@@ -423,7 +423,7 @@ export function HomeFeed() {
                 className="absolute -bottom-1 -right-1 flex size-6 items-center justify-center rounded-full bg-foreground text-background shadow-sm border-2 border-background cursor-pointer z-20 pointer-events-auto"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setShowStoryUpload(true);
+                  setShowMediaStudio(true);
                 }}
               >
                 <span className="text-lg leading-none mt-[-2px]">+</span>
