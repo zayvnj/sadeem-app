@@ -161,7 +161,7 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
       animate={{ x: 0 }}
       exit={{ x: "100%" }}
       transition={{ type: "spring", damping: 25, stiffness: 200 }}
-      className="absolute inset-0 z-50 flex flex-col bg-background overflow-hidden"
+      className="absolute inset-0 z-50 flex flex-col bg-background overflow-hidden" dir="rtl"
     >
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4 sticky top-0 bg-background/80 backdrop-blur-md z-10">
         <div className="flex items-center gap-3">
@@ -258,11 +258,11 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
         </div>
 
         {/* Grid */}
-        <div className="grid grid-cols-3 gap-[1px] bg-border/50">
+        <div className="grid grid-cols-3 gap-1.5 p-1.5 min-h-[300px]">
           {posts.map((post) => (
             <div
               key={post.id}
-              className="aspect-square bg-secondary relative overflow-hidden group cursor-pointer"
+              className="aspect-[4/5] rounded-2xl group relative cursor-pointer hover:scale-[0.98] transition-all duration-300 bg-gradient-to-br from-muted to-secondary border border-border/50 overflow-hidden shadow-sm hover:shadow-xl hover:border-foreground/20"
             >
               {post.media_url && (
                 post.media_url.match(/\.(mp4|webm|ogg)$/i) ? (
