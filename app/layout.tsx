@@ -5,6 +5,7 @@ import './globals.css'
 import { QueryProvider } from '@/lib/query-provider'
 import { SessionProvider } from 'next-auth/react'
 import { Toaster } from '@/components/ui/sonner'
+import { ThemeProvider } from 'next-themes'
 
 const cairo = Cairo({ subsets: ['arabic', 'latin'], variable: '--font-cairo' })
 
@@ -37,13 +38,15 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="ar" dir="rtl" className={`bg-background ${cairo.variable}`}>
+    <html lang="ar" dir="rtl" className={`bg-background ${cairo.variable}`} suppressHydrationWarning>
       <body className="font-sans antialiased">
-        <SessionProvider>
-          <QueryProvider>
-            {children}
-          </QueryProvider>
-        </SessionProvider>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <SessionProvider>
+            <QueryProvider>
+              {children}
+            </QueryProvider>
+          </SessionProvider>
+        </ThemeProvider>
         <Toaster position="bottom-center" />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
