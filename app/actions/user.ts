@@ -68,6 +68,8 @@ export async function getUserProfile(userId: string) {
         avatarUrl: true,
         bio: true,
         isVerified: true,
+        isProfessional: true,
+        professionalCategory: true,
         lastActive: true,
         _count: {
           select: { followers: true, following: true }
@@ -113,7 +115,7 @@ export async function toggleVerification(userId: string) {
   }
 }
 
-export async function updateUserProfile(data: { fullName?: string, username?: string, bio?: string, avatarUrl?: string }) {
+export async function updateUserProfile(data: { fullName?: string, username?: string, bio?: string, avatarUrl?: string, isProfessional?: boolean, professionalCategory?: string }) {
   try {
     const session = await auth();
     if (!session?.user?.id) return { success: false, error: 'Unauthorized' };
