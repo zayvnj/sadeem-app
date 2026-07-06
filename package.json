@@ -10,7 +10,8 @@
     "build": "npx prisma generate && next build",
     "start": "next start",
     "lint": "eslint .",
-    "test": "jest"
+    "test": "jest",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@capacitor-community/media": "^9.1.0",
