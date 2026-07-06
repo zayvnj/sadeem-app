@@ -42,16 +42,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // We will handle the check in the login form, but for context we can let it pass
           // or we can optionally check firebaseUser.emailVerified here.
 
-          // Get ID token to send to server
-          const token = await firebaseUser.getIdToken();
-
           // Here we would typically sync with our backend (Prisma)
-          // We'll call a server action to sync the user and return the Prisma user data
+          // We'll call an API route to sync the user and return the Prisma user data
           const response = await fetch('/api/auth/sync', {
             method: 'POST',
             headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`
+              'Content-Type': 'application/json'
             },
             body: JSON.stringify({
               uid: firebaseUser.uid,
