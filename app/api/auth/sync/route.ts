@@ -38,41 +38,30 @@ export async function POST(request: Request) {
       sameSite: 'lax',
     });
 
-    // Sync with Prisma
-    let user = await prisma.user.findUnique({
-      where: { email }
-    });
-
-    if (!user) {
-      // Create new user in Prisma
-      const generatedUsername = email.split('@')[0] + Math.floor(Math.random() * 1000);
-      user = await prisma.user.create({
-        data: {
-          id: uid, // Use Firebase UID as the primary key
-          email,
-          username: generatedUsername,
-          fullName: name || generatedUsername,
-          avatarUrl: photoURL || null,
-        }
-      });
-    } else {
-      // Update existing user with Firebase UID if it doesn't match
-      if (user.id !== uid) {
-          // In a fresh start scenario this shouldn't happen much, but good to handle
-          // Actually changing the ID of an existing user is complicated in Prisma due to foreign keys.
-          // Since we start fresh, we can assume the user was created with the Firebase UID.
-          // Let's just update the avatar or name if needed.
-      }
-    }
-
-    // Auto-upgrade admins
+    // Sync with Prisma via upsert
+    const generatedUsername = email.split('@')[0] + Math.floor(Math.random() * 1000);
     const adminEmails = ["sly86055r@gmail.com", "zainalabdeensalman123@gmail.com"];
-    if (adminEmails.includes(email) && user.role !== 'ADMIN') {
-       user = await prisma.user.update({
-         where: { email },
-         data: { role: 'ADMIN' }
-       });
-    }
+    const role = adminEmails.includes(email) ? 'ADMIN' : 'USER';
+
+    const user = await prisma.user.upsert({
+      where: { email },
+      update: {
+        // If user exists, optionally update name/avatar if they are missing
+        // We won't try to change the ID to uid here to avoid foreign key errors,
+        // but since this is a new setup, the ID should match the Firebase UID from creation.
+        fullName: name || undefined,
+        avatarUrl: photoURL || undefined,
+        role: role, // Ensure role is correctly synced
+      },
+      create: {
+        id: uid, // Use Firebase UID as the primary key
+        email,
+        username: generatedUsername,
+        fullName: name || generatedUsername,
+        avatarUrl: photoURL || null,
+        role: role,
+      }
+    });
 
     return NextResponse.json({ success: true, user });
 
