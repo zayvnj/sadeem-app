@@ -84,7 +84,7 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
 
   if (loading) {
     return (
-      <div className="absolute inset-0 z-50 flex flex-col bg-background">
+      <div className="absolute inset-0 z-[100] flex flex-col bg-background">
         <header className="flex h-14 shrink-0 items-center border-b border-border px-4">
           <button onClick={onBack} className="p-2 -mr-2 rounded-full hover:bg-secondary transition-colors">
             <ChevronRight className="size-6" />
@@ -99,7 +99,7 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
 
   if (!profile) {
     return (
-      <div className="absolute inset-0 z-50 flex flex-col bg-background">
+      <div className="absolute inset-0 z-[100] flex flex-col bg-background">
         <header className="flex h-14 shrink-0 items-center border-b border-border px-4">
           <button onClick={onBack} className="p-2 -mr-2 rounded-full hover:bg-secondary transition-colors">
             <ChevronRight className="size-6" />
@@ -165,7 +165,7 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
       animate={{ x: 0 }}
       exit={{ x: "100%" }}
       transition={{ type: "spring", damping: 25, stiffness: 200 }}
-      className="absolute inset-0 z-50 flex flex-col bg-background overflow-hidden" dir="rtl"
+      className="absolute inset-0 z-[100] flex flex-col bg-background overflow-hidden" dir="rtl"
     >
 
       {/* Scrollable Container with Parallax Cover inside */}

@@ -10,6 +10,7 @@ import { toast } from "sonner"
 import { useQueryClient } from "@tanstack/react-query"
 import { Haptics, ImpactStyle } from "@capacitor/haptics"
 import { Capacitor } from "@capacitor/core"
+import { uploadMediaToSupabase } from "@/lib/supabase-storage"
 
 interface MediaItem {
   id: string
@@ -91,20 +92,7 @@ export function MediaStudio() {
       const selectedMedia = mediaItems[selectedIndex]
 
       if (selectedMedia) {
-        const formData = new FormData()
-        formData.append('file', selectedMedia.file)
-
-        const uploadRes = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData
-        })
-        const uploadData = await uploadRes.json()
-
-        if (!uploadData.success) {
-          throw new Error("فشل في رفع الملف")
-        }
-
-        publicUrl = uploadData.url
+        publicUrl = await uploadMediaToSupabase(selectedMedia.file)
         mediaType = selectedMedia.type === "VIDEO" ? 'REEL' : 'IMAGE'
       }
 

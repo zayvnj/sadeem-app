@@ -8,6 +8,7 @@ import { createPost } from "@/app/actions/post"
 import { useNavigation } from "./navigation-context"
 import { toast } from "sonner"
 import { useQueryClient } from "@tanstack/react-query"
+import { uploadMediaToSupabase } from "@/lib/supabase-storage"
 
 export function CreatePostModal() {
   const { showCreatePost, setShowCreatePost } = useNavigation()
@@ -50,20 +51,7 @@ export function CreatePostModal() {
       let mediaType: "IMAGE" | "REEL" | null = null
 
       if (selectedFile) {
-        const formData = new FormData()
-        formData.append('file', selectedFile)
-
-        const uploadRes = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData
-        })
-        const uploadData = await uploadRes.json()
-
-        if (!uploadData.success) {
-          throw new Error("فشل في رفع الملف")
-        }
-
-        publicUrl = uploadData.url
+        publicUrl = await uploadMediaToSupabase(selectedFile)
         mediaType = selectedFile.type.startsWith('video/') ? 'REEL' : 'IMAGE'
       }
 
