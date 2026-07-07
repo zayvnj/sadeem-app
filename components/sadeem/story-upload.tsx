@@ -10,6 +10,7 @@ import { useStoriesStore } from "@/lib/stores/useStoriesStore"
 import { useNavigation } from "./navigation-context"
 import { CustomStoryGallery } from "./custom-story-gallery"
 import { Capacitor } from "@capacitor/core"
+import { uploadMediaToSupabase } from "@/lib/supabase-storage"
 
 interface StoryUploadProps {
   onUploadComplete: () => void
@@ -122,22 +123,11 @@ export function StoryUpload({ onUploadComplete, userAvatar }: StoryUploadProps) 
         uploadFile = new File([compressedBlob], `story_${Date.now()}.jpg`, { type: 'image/jpeg' })
       }
 
-      // 1. Upload via local API
-      const formData = new FormData()
-      formData.append('file', uploadFile)
-
-      const uploadRes = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData
-      })
-      const uploadData = await uploadRes.json()
-
-      if (!uploadData.success) {
-        throw new Error("فشل في رفع القصة")
-      }
+      // 1. Upload via Supabase Storage
+      const publicUrl = await uploadMediaToSupabase(uploadFile)
 
       // 2. Insert into stories table via Server Action
-      const res = await createStory(uploadData.url)
+      const res = await createStory(publicUrl)
 
       if (!res.success || !res.data) {
         throw new Error(res.error || "فشل في حفظ القصة")

@@ -73,6 +73,16 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps) {
   const isOpeningRef = useRef(false)
   const queryClient = useQueryClient()
 
+  useEffect(() => {
+    const prefill = searchParams.get('prefill')
+    if (prefill && activeChatId) {
+      setNewMessage(prefill)
+      const params = new URLSearchParams(searchParams.toString())
+      params.delete('prefill')
+      router.replace(`?${params.toString()}`, { scroll: false })
+    }
+  }, [searchParams, router, activeChatId])
+
   // Long press handling
   const [activeLongPressId, setActiveLongPressId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)

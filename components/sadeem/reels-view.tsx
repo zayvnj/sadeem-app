@@ -11,6 +11,7 @@ import { CommentsSheet } from "./comments-sheet"
 import { Bookmark, MoreHorizontal } from "lucide-react"
 import { PostOptionsSheet } from "./post-options-sheet"
 import { toast } from "sonner"
+import { uploadMediaToSupabase } from "@/lib/supabase-storage"
 
 export function ReelsView() {
   const [reels, setReels] = useState<any[]>([])
@@ -187,21 +188,12 @@ export function ReelsView() {
               const toastId = toast.loading("جاري رفع الريلز...");
 
               try {
-                const formData = new FormData();
-                formData.append('file', file);
-
-                const uploadRes = await fetch('/api/upload', {
-                  method: 'POST',
-                  body: formData
-                });
-                const uploadData = await uploadRes.json();
-
-                if (!uploadData.success) throw new Error("فشل في رفع الملف");
+                const publicUrl = await uploadMediaToSupabase(file);
 
                 const { createPost } = await import("@/app/actions/post");
                 const res = await createPost({
                   caption: "",
-                  mediaUrl: uploadData.url,
+                  mediaUrl: publicUrl,
                   mediaType: "REEL"
                 });
 

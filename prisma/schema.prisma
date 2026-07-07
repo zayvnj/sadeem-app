@@ -4,7 +4,7 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
+  provider = "postgresql"
 }
 
 // ==========================================
@@ -13,38 +13,39 @@ datasource db {
 
 // جدول المستخدمين
 model User {
-  id         String   @id @default(uuid())
-  username   String   @unique
-  email      String   @unique
-  password   String?
-  fullName   String?
-  bio        String?
-  avatarUrl  String?
-  coverImage String?
-  isOnline   Boolean  @default(false)
-  role       String   @default("USER")
-  isVerified Boolean  @default(false)
-  isProfessional Boolean @default(false)
+  id                   String   @id @default(uuid())
+  username             String   @unique
+  email                String   @unique
+  password             String?
+  fullName             String?
+  bio                  String?
+  avatarUrl            String?
+  coverImage           String?
+  isOnline             Boolean  @default(false)
+  role                 String   @default("USER")
+  isVerified           Boolean  @default(false)
+  isProfessional       Boolean  @default(false)
   professionalCategory String?
-  lastActive DateTime @default(now())
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  lastActive           DateTime @default(now())
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   // العلاقات
-  posts         Post[]
-  stories       Story[]
-  storyViews    StoryView[]
-  comments      Comment[]
-  likes         Like[]
-  savedPosts    SavedPost[]
-  messagesSent  Message[] @relation("Sender")
+  posts        Post[]
+  reels        Reel[]
+  stories      Story[]
+  storyViews   StoryView[]
+  comments     Comment[]
+  likes        Like[]
+  savedPosts   SavedPost[]
+  messagesSent Message[]   @relation("Sender")
 
   // المحادثات
-  chats         Chat[]    @relation("ChatParticipants")
+  chats Chat[] @relation("ChatParticipants")
 
   // نظام المتابعة
-  followers     Follow[] @relation("UserFollowers")
-  following     Follow[] @relation("UserFollowing")
+  followers Follow[] @relation("UserFollowers")
+  following Follow[] @relation("UserFollowing")
 
   // الإشعارات
   notifications Notification[]
@@ -52,9 +53,9 @@ model User {
 
 // جدول المحادثات (الدردشة الجماعية أو الثنائية)
 model Chat {
-  id           String    @id @default(uuid())
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   participants User[]    @relation("ChatParticipants")
   messages     Message[]
@@ -67,8 +68,8 @@ model Follow {
   followingId String
   createdAt   DateTime @default(now())
 
-  follower    User     @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
-  following   User     @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+  follower  User @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
 
   @@unique([followerId, followingId]) // يمنع متابعة نفس الشخص مرتين
 }
@@ -82,12 +83,12 @@ model Post {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  comments  Comment[]
-  likes     Like[]
-  savedBy   SavedPost[]
+  comments Comment[]
+  likes    Like[]
+  savedBy  SavedPost[]
 }
 
 // جدول الستوريات (القصص اليومية)
@@ -97,10 +98,10 @@ model Story {
   createdAt DateTime @default(now())
   expiresAt DateTime // وقت الانتهاء بعد 24 ساعة
 
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  views     StoryView[]
+  views StoryView[]
 }
 
 // جدول مشاهدات القصص
@@ -108,11 +109,11 @@ model StoryView {
   id        String   @id @default(uuid())
   createdAt DateTime @default(now())
 
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  storyId   String
-  story     Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  storyId String
+  story   Story  @relation(fields: [storyId], references: [id], onDelete: Cascade)
 
   @@unique([userId, storyId]) // يمنع تسجيل مشاهدة نفس القصة أكثر من مرة لنفس المستخدم
 }
@@ -123,11 +124,14 @@ model Comment {
   text      String
   createdAt DateTime @default(now())
 
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  postId    String
-  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId String?
+  post   Post?   @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  reelId String?
+  reel   Reel?   @relation(fields: [reelId], references: [id], onDelete: Cascade)
 }
 
 // جدول الإعجابات (اللايكات)
@@ -135,13 +139,17 @@ model Like {
   id        Int      @id @default(autoincrement())
   createdAt DateTime @default(now())
 
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  postId    String
-  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId String?
+  post   Post?   @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  reelId String?
+  reel   Reel?   @relation(fields: [reelId], references: [id], onDelete: Cascade)
 
   @@unique([userId, postId]) // يمنع إعطاء لايكين من نفس الشخص لنفس المنشور
+  @@unique([userId, reelId]) // يمنع إعطاء لايكين من نفس الشخص لنفس الريل
 }
 
 // جدول المحفوظات (Saved Posts)
@@ -149,38 +157,58 @@ model SavedPost {
   id        Int      @id @default(autoincrement())
   createdAt DateTime @default(now())
 
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  postId    String
-  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId String?
+  post   Post?   @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  reelId String?
+  reel   Reel?   @relation(fields: [reelId], references: [id], onDelete: Cascade)
 
   @@unique([userId, postId]) // يمنع حفظ نفس المنشور أكثر من مرة لنفس الشخص
+  @@unique([userId, reelId]) // يمنع حفظ نفس الريل أكثر من مرة لنفس الشخص
 }
 
 // جدول الرسائل (الدردشة)
 model Message {
-  id         String   @id @default(uuid())
-  text       String?
-  mediaUrl   String?
-  isRead     Boolean  @default(false)
-  createdAt  DateTime @default(now())
+  id        String   @id @default(uuid())
+  text      String?
+  mediaUrl  String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
 
-  chat_id    String
-  chat       Chat     @relation(fields: [chat_id], references: [id], onDelete: Cascade)
+  chat_id String
+  chat    Chat   @relation(fields: [chat_id], references: [id], onDelete: Cascade)
 
-  senderId   String
-  sender     User     @relation("Sender", fields: [senderId], references: [id], onDelete: Cascade)
+  senderId String
+  sender   User   @relation("Sender", fields: [senderId], references: [id], onDelete: Cascade)
 }
 
 // جدول الإشعارات
 model Notification {
   id        String   @id @default(uuid())
-  type      String   // نوع الإشعار: LIKE, COMMENT, FOLLOW
+  type      String // نوع الإشعار: LIKE, COMMENT, FOLLOW
   content   String
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// جدول الريلز (Reels)
+model Reel {
+  id        String   @id @default(uuid())
+  videoUrl  String
+  caption   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  likes    Like[]
+  comments Comment[]
+  savedBy  SavedPost[]
 }
