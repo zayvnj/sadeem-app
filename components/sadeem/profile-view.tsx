@@ -24,6 +24,7 @@ import { Preferences } from "@capacitor/preferences"
 import { useTheme } from "next-themes"
 import { useStoryNavigation } from "./story/useStoryNavigation"
 import { ThemeToggle } from "./theme-toggle"
+import { supabase } from "@/lib/supabase"
 
 const tabs = [
   { icon: Grid3x3, key: "grid" },
@@ -204,22 +205,25 @@ export function ProfileView() {
       if (editAvatarRemoved) {
         avatarUrl = null
       } else if (editAvatarFile) {
-        const formData = new FormData()
-        formData.append('file', editAvatarFile)
-
         try {
-          const res = await fetch('/api/upload', {
-            method: 'POST',
-            body: formData
-          })
-          const data = await res.json()
-          if (data.success) {
-            avatarUrl = data.url
-          } else {
+          const fileExt = editAvatarFile.name.split('.').pop()
+          const fileName = `${currentUser.id}-${Date.now()}.${fileExt}`
+          const { data, error } = await supabase.storage
+            .from('avatars')
+            .upload(fileName, editAvatarFile, { upsert: true })
+
+          if (error) {
+            console.error("Supabase avatar upload error:", error)
             setEditError("حدث خطأ أثناء رفع الصورة الشخصية")
             setEditLoading(false)
             return
           }
+
+          const { data: { publicUrl } } = supabase.storage
+            .from('avatars')
+            .getPublicUrl(fileName)
+
+          avatarUrl = publicUrl
         } catch (uploadError) {
            console.error("Avatar upload error:", uploadError)
            setEditError("حدث خطأ أثناء رفع الصورة الشخصية")
