@@ -23,7 +23,7 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
   return (
     <button
       onClick={() => setTheme(isDark ? "light" : "dark")}
-      className={`relative p-2 rounded-full hover:bg-secondary transition-colors overflow-hidden flex items-center justify-center ${className}`}
+      className={`relative z-50 p-2 rounded-full hover:bg-secondary transition-colors overflow-hidden flex items-center justify-center ${className}`}
       aria-label="Toggle theme"
     >
       <AnimatePresence mode="wait" initial={false}>

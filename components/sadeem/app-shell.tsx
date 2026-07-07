@@ -137,7 +137,7 @@ function AppShellContent() {
             {/* Header - Only visible on Home feed */}
             {active === "home" && (
               <header
-                className={`flex shrink-0 items-center justify-between px-4 py-3 transition-colors duration-300 relative ${
+                className={`flex shrink-0 items-center justify-between px-4 py-3 transition-colors duration-300 relative z-50 ${
                   isReels ? "bg-black text-white" : "bg-background text-foreground"
                 }`}
               >
@@ -164,7 +164,7 @@ function AppShellContent() {
             )}
 
             {/* Content */}
-            <main className="relative flex-1 overflow-hidden">
+            <main className="relative flex-1 overflow-hidden pointer-events-auto">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={active}
@@ -172,7 +172,7 @@ function AppShellContent() {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -24 }}
                   transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-                  className={`absolute inset-0 ${isReels ? "" : "overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"}`}
+                  className={`absolute inset-0 ${isReels ? "" : "overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"} z-0`}
                 >
                   {active === "home" && <HomeFeed />}
                   {active === "reels" && <ReelsView />}
