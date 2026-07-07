@@ -4,8 +4,6 @@ import { useState, useEffect, useRef } from "react"
 import { motion, useScroll, useTransform } from "framer-motion"
 import { Settings, Grid3x3, Film, Bookmark, Bell, Moon, Shield, LogOut, Loader2, User, Camera, Trash2, BadgeCheck, X, ChevronLeft, UserX, BarChart3, TrendingUp, Users, Eye } from "lucide-react"
 import { useSession } from "@/lib/auth-context"
-import { auth } from "@/lib/firebase"
-import { signOut } from "firebase/auth"
 import { getUserProfile, updateUserProfile, getUserPosts, deleteUserAccount, getSavedPosts } from "@/app/actions/user"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Switch } from "@/components/ui/switch"
@@ -262,17 +260,16 @@ export function ProfileView() {
     toast.success("تم تحديث الإعدادات")
   }
 
+
   const handleLogout = async () => {
     try {
-      await signOut(auth)
-      await Preferences.clear()
-      localStorage.clear()
-      toast.success("تم تسجيل الخروج")
+      await supabase.auth.signOut()
+      // Auth context and AppShell will handle redirection to AuthView
     } catch (error) {
-      console.error('Error signing out:', error)
-      toast.error("حدث خطأ أثناء تسجيل الخروج")
+      console.error("Logout error:", error)
     }
   }
+
 
   const handleDeleteAccount = async () => {
     try {

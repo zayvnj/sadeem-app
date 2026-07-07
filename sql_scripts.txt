@@ -18,7 +18,7 @@ DROP POLICY IF EXISTS "Allow all" ON post_likes;
 DROP POLICY IF EXISTS "Allow all" ON reel_likes;
 
 -- 3. Create open policies for testing (since JWT signature validation might fail due to mismatched secrets)
--- Note: In production, consider verifying x-firebase-uid or writing a custom JWT verification function.
+-- Note: In production, consider verifying x-supabase-uid or writing a custom JWT verification function.
 CREATE POLICY "Allow all operations for testing" ON posts FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all operations for testing" ON stories FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all operations for testing" ON reels FOR ALL USING (true) WITH CHECK (true);
@@ -30,7 +30,7 @@ CREATE POLICY "Allow all operations for testing" ON reel_likes FOR ALL USING (tr
 -- Note: Replace 'media' with your actual bucket name if different.
 CREATE POLICY "Allow media uploads for testing"
 ON storage.objects FOR INSERT
-WITH CHECK (bucket_id = 'media' AND current_setting('request.headers')::json->>'x-firebase-uid' IS NOT NULL);
+WITH CHECK (bucket_id = 'media' AND current_setting('request.headers')::json->>'x-supabase-uid' IS NOT NULL);
 
 CREATE POLICY "Allow media reads for all"
 ON storage.objects FOR SELECT
