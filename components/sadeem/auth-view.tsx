@@ -71,8 +71,25 @@ export function AuthView() {
         }
       })
       if (error) throw error
+
       toast.success("تم إنشاء الحساب بنجاح!")
-      // Usually user is logged in automatically, auth context handles it
+
+      // Auto-login if session was not automatically applied
+      if (!data.session) {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        })
+        if (signInError) {
+          console.error("Auto-login error after registration:", signInError)
+        }
+      } else {
+        // Explicitly set the session to ensure onAuthStateChange triggers and AuthContext updates
+        await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token
+        })
+      }
     } catch (err: any) {
       console.error("Registration error:", err)
       toast.error(getSupabaseErrorMessage(err))
