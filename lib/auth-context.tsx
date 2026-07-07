@@ -1,8 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
-import { auth } from "./firebase";
+import { supabase } from "./supabase";
 import { useRouter } from "next/navigation";
 
 interface AppUser {
@@ -34,67 +33,77 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      try {
-        if (firebaseUser) {
-          // If the email is not verified, we consider them unauthenticated in our app flow
-          // (They must verify email first, except maybe if they are just registering)
-          // We will handle the check in the login form, but for context we can let it pass
-          // or we can optionally check firebaseUser.emailVerified here.
+    // Initial fetch of session
+    const getSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      handleAuthChange(session?.user || null);
+    };
 
-          // Here we would typically sync with our backend (Prisma)
-          // We'll call an API route to sync the user and return the Prisma user data
-          const response = await fetch('/api/auth/sync', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              name: firebaseUser.displayName,
-              photoURL: firebaseUser.photoURL,
-              emailVerified: firebaseUser.emailVerified
-            })
-          });
+    getSession();
 
-          if (response.ok) {
-            const data = await response.json();
-            setUser({
-              id: data.user.id,
-              email: firebaseUser.email,
-              name: firebaseUser.displayName,
-              username: data.user.username,
-              fullName: data.user.fullName,
-              avatarUrl: data.user.avatarUrl || firebaseUser.photoURL,
-              role: data.user.role,
-              isVerified: data.user.isVerified
-            });
-          } else {
-             // Fallback if sync fails but we are logged in
-             setUser({
-              id: firebaseUser.uid,
-              email: firebaseUser.email,
-              name: firebaseUser.displayName,
-              avatarUrl: firebaseUser.photoURL,
-            });
-          }
-        } else {
-          // User is signed out
-          setUser(null);
-          // Optional: call a server route to clear any session cookies if we are using them
-          await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
-        }
-      } catch (error) {
-        console.error("Auth sync error:", error);
-        setUser(null);
-      } finally {
-        setLoading(false);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        handleAuthChange(session?.user || null);
       }
-    });
+    );
 
-    return () => unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
+
+  const handleAuthChange = async (supabaseUser: any) => {
+    try {
+      if (supabaseUser) {
+        // Here we sync with our backend (Prisma)
+        const response = await fetch('/api/auth/sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            uid: supabaseUser.id,
+            email: supabaseUser.email,
+            name: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || null,
+            photoURL: supabaseUser.user_metadata?.avatar_url || supabaseUser.user_metadata?.picture || null,
+            emailVerified: supabaseUser.email_confirmed_at != null
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setUser({
+            id: data.user.id,
+            email: supabaseUser.email,
+            name: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || null,
+            username: data.user.username,
+            fullName: data.user.fullName,
+            avatarUrl: data.user.avatarUrl || supabaseUser.user_metadata?.avatar_url || supabaseUser.user_metadata?.picture || null,
+            role: data.user.role,
+            isVerified: data.user.isVerified
+          });
+        } else {
+           // Fallback if sync fails but we are logged in
+           setUser({
+            id: supabaseUser.id,
+            email: supabaseUser.email,
+            name: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || null,
+            avatarUrl: supabaseUser.user_metadata?.avatar_url || supabaseUser.user_metadata?.picture || null,
+          });
+        }
+      } else {
+        // User is signed out
+        setUser(null);
+        // Optional: call a server route to clear any session cookies if we are using them
+        await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+      }
+    } catch (error) {
+      console.error("Auth sync error:", error);
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <AuthContext.Provider value={{ user, loading, status: loading ? "loading" : user ? "authenticated" : "unauthenticated" }}>

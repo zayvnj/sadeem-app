@@ -14,7 +14,6 @@ export async function POST(request: Request) {
        return NextResponse.json({ error: 'Email required' }, { status: 400 });
     }
 
-    // TODO: Re-implement secure token verification once Turbopack/ESM server issues are resolved.
     // Set a session cookie for server components/actions to use
     // Using a 14 day expiry
     const expiresIn = 60 * 60 * 24 * 14 * 1000;
@@ -36,14 +35,12 @@ export async function POST(request: Request) {
       where: { email },
       update: {
         // If user exists, optionally update name/avatar if they are missing
-        // We won't try to change the ID to uid here to avoid foreign key errors,
-        // but since this is a new setup, the ID should match the Firebase UID from creation.
         fullName: name || undefined,
         avatarUrl: photoURL || undefined,
         role: role, // Ensure role is correctly synced
       },
       create: {
-        id: uid, // Use Firebase UID as the primary key
+        id: uid, // Use Supabase user.id as the primary key
         email,
         username: generatedUsername,
         fullName: name || generatedUsername,

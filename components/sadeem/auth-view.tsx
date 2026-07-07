@@ -1,28 +1,16 @@
 "use client"
-
 import { useState } from "react"
+import { supabase } from "@/lib/supabase"
 import { Chrome, Mail, Lock, User, Loader2, ArrowRight } from "lucide-react"
 import { Logo } from "./logo"
 import { toast } from "sonner"
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signInWithPopup,
-  sendEmailVerification,
-  sendPasswordResetEmail,
-  updateProfile
-} from "firebase/auth"
-import { auth, googleProvider } from "@/lib/firebase"
-
 type AuthState = "LOGIN" | "REGISTER" | "FORGOT_PASSWORD";
-
 export function AuthView() {
   const [loading, setLoading] = useState(false)
   const [authState, setAuthState] = useState<AuthState>("LOGIN")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [fullName, setFullName] = useState("")
-
   // Strict email regex validation
   const validateEmail = (emailStr: string) => {
     return String(emailStr)
@@ -31,38 +19,33 @@ export function AuthView() {
         /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|.(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/
       );
   };
-
-  const getFirebaseErrorMessage = (error: any) => {
-    switch (error.code) {
-      case 'auth/email-already-in-use':
+  const getSupabaseErrorMessage = (error: any) => {
+    switch (error.message) {
+      case 'User already registered':
         return 'البريد الإلكتروني مستخدم بالفعل';
-      case 'auth/invalid-email':
+      case 'Invalid email':
         return 'البريد الإلكتروني غير صالح';
-      case 'auth/weak-password':
+      case 'Password should be at least 6 characters':
         return 'كلمة المرور ضعيفة جداً';
-      case 'auth/user-not-found':
-      case 'auth/wrong-password':
-      case 'auth/invalid-credential':
+      case 'Invalid login credentials':
         return 'البريد الإلكتروني أو كلمة المرور غير صحيحة';
-      case 'auth/too-many-requests':
+      case 'Too many requests':
         return 'محاولات كثيرة جداً. حاول مرة أخرى لاحقاً';
       default:
-        return 'حدث خطأ غير متوقع';
+        return error.message || 'حدث خطأ غير متوقع';
     }
   };
-
   const handleGoogleSignIn = async () => {
     setLoading(true)
     try {
-      await signInWithPopup(auth, googleProvider)
+      await supabase.auth.signInWithOAuth({ provider: 'google' })
       // AuthContext will handle the sync and state update automatically
     } catch (err: any) {
       console.error("[Google Auth] Catch Block Error:", err)
-      toast.error(getFirebaseErrorMessage(err))
+      toast.error(getSupabaseErrorMessage(err))
       setLoading(false)
     }
   }
-
   const handleRegister = async () => {
     if (!validateEmail(email)) {
       toast.error("الرجاء إدخال بريد إلكتروني صالح")
@@ -76,82 +59,66 @@ export function AuthView() {
       toast.error("الرجاء إدخال الاسم الكامل")
       return;
     }
-
     setLoading(true)
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password)
-
-      // Update profile with name
-      await updateProfile(userCredential.user, {
-        displayName: fullName
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+          }
+        }
       })
-
-      // Send verification email
-      await sendEmailVerification(userCredential.user)
-
-      toast.success("تم إنشاء الحساب بنجاح! الرجاء التحقق من بريدك الإلكتروني لتفعيل الحساب.")
-
-      // Since they are not verified, we should ideally sign them out or let the auth context block them
-      // For now we rely on the context or the app to handle unverified states, but logging out makes sure they verify
-      await auth.signOut();
-      setAuthState("LOGIN")
-      setPassword("")
-
+      if (error) throw error
+      toast.success("تم إنشاء الحساب بنجاح!")
+      // Usually user is logged in automatically, auth context handles it
     } catch (err: any) {
       console.error("Registration error:", err)
-      toast.error(getFirebaseErrorMessage(err))
+      toast.error(getSupabaseErrorMessage(err))
     } finally {
       setLoading(false)
     }
   }
-
   const handleLogin = async () => {
     if (!validateEmail(email)) {
       toast.error("الرجاء إدخال بريد إلكتروني صالح")
       return;
     }
-
     setLoading(true)
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password)
-
-      if (!userCredential.user.emailVerified) {
-        toast.error("الرجاء التحقق من بريدك الإلكتروني أولاً.")
-        await auth.signOut();
-        setLoading(false);
-        return;
-      }
-
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+      if (error) throw error
       // Successful login will be picked up by AuthContext
     } catch (err: any) {
       console.error("Login error:", err)
-      toast.error(getFirebaseErrorMessage(err))
+      toast.error(getSupabaseErrorMessage(err))
       setLoading(false)
     }
   }
-
   const handleForgotPassword = async () => {
     if (!validateEmail(email)) {
       toast.error("الرجاء إدخال بريد إلكتروني صالح")
       return;
     }
-
     setLoading(true)
     try {
-      await sendPasswordResetEmail(auth, email)
+      const { error } = await supabase.auth.resetPasswordForEmail(email)
+      if (error) throw error
       toast.success("تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني")
       setAuthState("LOGIN")
     } catch (err: any) {
       console.error("Forgot password error:", err)
-      toast.error(getFirebaseErrorMessage(err))
+      toast.error(getSupabaseErrorMessage(err))
     } finally {
       setLoading(false)
     }
   }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-
     if (authState === "LOGIN") {
       await handleLogin();
     } else if (authState === "REGISTER") {
@@ -160,11 +127,9 @@ export function AuthView() {
       await handleForgotPassword();
     }
   }
-
   return (
     <div className="flex h-full min-h-dvh w-full flex-col items-center justify-center bg-background p-6" dir="rtl">
       <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-8 shadow-2xl relative overflow-hidden">
-
         {/* Header section with optional back button */}
         <div className="mb-8 text-center flex flex-col items-center relative">
           {authState !== "LOGIN" && (
@@ -177,7 +142,6 @@ export function AuthView() {
               <ArrowRight className="size-5" />
             </button>
           )}
-
           <Logo className="text-5xl mb-4" />
           <p className="mt-2 text-sm text-muted-foreground font-medium">
             {authState === "LOGIN" && "تسجيل الدخول إلى حسابك"}
@@ -185,7 +149,6 @@ export function AuthView() {
             {authState === "FORGOT_PASSWORD" && "استعادة كلمة المرور"}
           </p>
         </div>
-
         <form onSubmit={handleSubmit} className="space-y-4 mb-6">
           {authState === "REGISTER" && (
             <div className="space-y-2">
@@ -203,7 +166,6 @@ export function AuthView() {
               </div>
             </div>
           )}
-
           <div className="space-y-2">
             <div className="relative">
               <Mail className="absolute right-3 top-3 size-5 text-muted-foreground" />
@@ -219,7 +181,6 @@ export function AuthView() {
               />
             </div>
           </div>
-
           {authState !== "FORGOT_PASSWORD" && (
             <div className="space-y-2">
               <div className="relative">
@@ -249,7 +210,6 @@ export function AuthView() {
               )}
             </div>
           )}
-
           <button
             type="submit"
             disabled={loading}
@@ -262,7 +222,6 @@ export function AuthView() {
             )}
           </button>
         </form>
-
         {authState === "LOGIN" && (
           <>
             <div className="relative mb-6">
@@ -273,7 +232,6 @@ export function AuthView() {
                 <span className="bg-card px-2 text-muted-foreground font-medium">أو</span>
               </div>
             </div>
-
             <button
               type="button"
               onClick={handleGoogleSignIn}
@@ -289,7 +247,6 @@ export function AuthView() {
                 </>
               )}
             </button>
-
             <div className="mt-6 text-center text-sm">
               <button
                 type="button"
