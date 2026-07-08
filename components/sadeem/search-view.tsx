@@ -43,6 +43,7 @@ export function SearchView() {
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     initialPageParam: undefined as string | undefined,
     staleTime: 60000,
+    networkMode: 'offlineFirst',
   })
 
   const { ref: loadMoreRef, inView } = useInView()

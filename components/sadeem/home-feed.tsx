@@ -57,6 +57,7 @@ export function HomeFeed() {
       return res.success ? res.data : []
     },
     staleTime: 60000,
+    networkMode: 'offlineFirst',
   })
 
   // 2. Fetch Reels (Horizontal top bar)
@@ -68,6 +69,7 @@ export function HomeFeed() {
       return res.success ? res.data : []
     },
     staleTime: 60000,
+    networkMode: 'offlineFirst',
   })
 
   // 3. Fetch Posts (Infinite Scroll DB Pagination)
@@ -124,6 +126,7 @@ export function HomeFeed() {
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     initialPageParam: undefined as string | undefined,
     staleTime: 60000,
+    networkMode: 'offlineFirst',
   })
 
   const { ref: loadMoreRef, inView } = useInView()
@@ -423,32 +426,59 @@ export function HomeFeed() {
       {/* Stories horizontal scroll */}
       <div className="mb-8 mt-6 w-full overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="flex gap-4">
-          <button
-            onClick={() => handleAvatarTap(currentUser?.id || '')}
-            className="flex flex-col items-center gap-2 shrink-0 group w-[72px]"
-          >
-            <div className="relative">
-              <div className="flex size-[72px] items-center justify-center rounded-full bg-secondary transition-transform group-hover:scale-95 group-active:scale-90 border-2 border-border overflow-hidden">
-                {currentUserAvatar ? (
-                  <img src={currentUserAvatar} alt="My Avatar" className="size-full object-cover" />
-                ) : (
-                  <Heart className="size-8 text-muted-foreground" />
-                )}
-              </div>
-              <div
-                className="absolute -bottom-1 -right-1 flex size-6 items-center justify-center rounded-full bg-foreground text-background shadow-sm border-2 border-background cursor-pointer z-20 pointer-events-auto"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowMediaStudio(true);
-                }}
-              >
-                <span className="text-lg leading-none mt-[-2px]">+</span>
-              </div>
-            </div>
-            <span className="text-xs font-bold text-foreground">أنت</span>
-          </button>
+          {(() => {
+            // Find if current user has active stories in the fetched array
+            const currentUserStoriesIndex = stories.findIndex((group: any) => group.id === currentUser?.id)
+            const currentUserStoryGroup: any = currentUserStoriesIndex >= 0 ? stories[currentUserStoriesIndex] : null
 
-          {stories.map((userGroup: any, i: number) => {
+            // Note: fallback to userGroup.stories or userGroup array since both formats might be used
+            const myStoriesArr = currentUserStoryGroup?.stories || (Array.isArray(currentUserStoryGroup) ? currentUserStoryGroup : [])
+
+            const hasMyUnseen = currentUserStoryGroup ? (
+              currentUserStoryGroup.hasUnseen !== undefined
+                ? currentUserStoryGroup.hasUnseen && !myStoriesArr.every((s:any) => viewedStoryIds.has(s.id))
+                : myStoriesArr.some((s: any) => !viewedStoryIds.has(s.id))
+            ) : false
+
+            // Filter out current user from the rest of the list so it doesn't duplicate
+            const otherStories = stories.filter((group: any) => group.id !== currentUser?.id && group[0]?.user_id !== currentUser?.id)
+
+            return (
+              <>
+                <button
+                  onClick={() => handleAvatarTap(currentUser?.id || '')}
+                  className="flex flex-col items-center gap-2 shrink-0 group w-[72px]"
+                >
+                  <div className="relative">
+                    <div className={`flex size-[72px] items-center justify-center rounded-full bg-secondary transition-transform group-hover:scale-95 group-active:scale-90 border-2 overflow-hidden ${
+                      currentUserStoryGroup
+                        ? (hasMyUnseen ? "border-transparent bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-500 p-[3px]" : "border-border p-[3px]")
+                        : "border-border"
+                    }`}>
+                      <div className="size-full rounded-full bg-background overflow-hidden flex items-center justify-center">
+                        {currentUserAvatar ? (
+                          <img src={currentUserAvatar} alt="My Avatar" className="size-full object-cover" />
+                        ) : (
+                          <Heart className="size-8 text-muted-foreground" />
+                        )}
+                      </div>
+                    </div>
+                    {!currentUserStoryGroup && (
+                      <div
+                        className="absolute -bottom-1 -right-1 flex size-6 items-center justify-center rounded-full bg-foreground text-background shadow-sm border-2 border-background cursor-pointer z-20 pointer-events-auto"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowStoryUpload(true);
+                        }}
+                      >
+                        <span className="text-lg leading-none mt-[-2px]">+</span>
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-xs font-bold text-foreground">أنت</span>
+                </button>
+
+                {otherStories.map((userGroup: any, i: number) => {
             const firstStory = userGroup.stories?.[0] || userGroup[0] // handle potential nested structure
             if (!firstStory) return null;
 
@@ -486,6 +516,9 @@ export function HomeFeed() {
               </button>
             )
           })}
+          </>
+        )
+      })()}
         </div>
       </div>
 
