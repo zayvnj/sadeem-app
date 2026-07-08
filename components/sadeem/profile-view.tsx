@@ -328,24 +328,7 @@ export function ProfileView() {
         <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-background to-transparent" />
       </div>
 
-      {/* Edit Cover Button - pointer events auto so it can be clicked */}
-      <div className="absolute top-36 left-4 z-10">
-        <button
-          onClick={() => coverInputRef.current?.click()}
-          disabled={isUploadingCover}
-          className="flex items-center justify-center p-2 rounded-full bg-background/30 hover:bg-background/50 backdrop-blur-md border border-white/20 shadow-lg transition-all text-white active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-          title="تغيير الغلاف"
-        >
-          {isUploadingCover ? <Loader2 className="size-5 animate-spin" /> : <Camera className="size-5" />}
-        </button>
-        <input
-          type="file"
-          ref={coverInputRef}
-          className="hidden"
-          accept="image/*"
-          onChange={handleCoverChange}
-        />
-      </div>
+
 
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 sticky top-0 z-10">
@@ -530,8 +513,27 @@ export function ProfileView() {
             <SheetHeader className="mb-4">
               <SheetTitle className="text-center">تعديل الملف الشخصي</SheetTitle>
             </SheetHeader>
+            <div className="w-full flex justify-end px-4 mb-4">
+              <button
+                onClick={() => coverInputRef.current?.click()}
+                disabled={isUploadingCover}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-secondary hover:bg-secondary/80 transition-colors text-sm font-semibold border border-border/50"
+              >
+                {isUploadingCover ? <Loader2 className="size-4 animate-spin" /> : <Camera className="size-4" />}
+                تغيير الغلاف
+              </button>
+            </div>
 
-            <div className="flex flex-col items-center gap-4 mb-6">
+
+
+              <input
+                type="file"
+                ref={coverInputRef}
+                className="hidden"
+                accept="image/*"
+                onChange={handleCoverChange}
+              />
+<div className="flex flex-col items-center gap-4 mb-6">
               <div className="relative group">
                 <div className="flex size-24 items-center justify-center rounded-full bg-muted border-2 border-border overflow-hidden">
                   {editAvatarPreview ? (

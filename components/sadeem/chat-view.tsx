@@ -75,13 +75,13 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps) {
 
   useEffect(() => {
     const prefill = searchParams.get('prefill')
-    if (prefill && activeChatId) {
+    if (prefill && activeChat?.id) {
       setNewMessage(prefill)
       const params = new URLSearchParams(searchParams.toString())
       params.delete('prefill')
       router.replace(`?${params.toString()}`, { scroll: false })
     }
-  }, [searchParams, router, activeChatId])
+  }, [searchParams, router, activeChat?.id])
 
   // Long press handling
   const [activeLongPressId, setActiveLongPressId] = useState<string | null>(null)
@@ -112,6 +112,7 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps) {
     },
     enabled: !!currentUser,
     staleTime: 60000,
+    networkMode: 'offlineFirst',
   })
 
   // 2. Fetch Messages with React Query
@@ -131,6 +132,7 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps) {
     },
     enabled: !!activeChat?.user?.id,
     staleTime: 60000,
+    networkMode: 'offlineFirst',
   })
 
   // Simulate real-time by polling
