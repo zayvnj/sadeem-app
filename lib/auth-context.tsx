@@ -43,7 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
-        handleAuthChange(session?.user || null);
+        handleAuthChange(session?.user || null, session);
       }
     );
 
@@ -52,9 +52,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const handleAuthChange = async (supabaseUser: any) => {
+  const handleAuthChange = async (supabaseUser: any, sessionObj?: any) => {
     try {
       if (supabaseUser) {
+        if (!sessionObj) {
+          const { data } = await supabase.auth.getSession();
+          sessionObj = data?.session;
+        }
+
         // Here we sync with our backend (Prisma)
         const response = await fetch('/api/auth/sync', {
           method: 'POST',
@@ -72,7 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (response.ok) {
           const data = await response.json();
-          setUser({
+          const mappedUser = {
             id: data.user.id,
             email: supabaseUser.email,
             name: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || null,
@@ -81,7 +86,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             avatarUrl: data.user.avatarUrl || supabaseUser.user_metadata?.avatar_url || supabaseUser.user_metadata?.picture || null,
             role: data.user.role,
             isVerified: data.user.isVerified
-          });
+          };
+          setUser(mappedUser);
+
+          // Save to local storage for quick account switching
+          try {
+            const savedAccounts = JSON.parse(localStorage.getItem('sadeem_saved_accounts') || '[]');
+            const accountExists = savedAccounts.find((acc: any) => acc.id === mappedUser.id);
+            const accountData = {
+              id: mappedUser.id,
+              username: mappedUser.username || mappedUser.name || mappedUser.email,
+              avatarUrl: mappedUser.avatarUrl,
+              access_token: sessionObj?.access_token,
+              refresh_token: sessionObj?.refresh_token
+            };
+
+            if (!accountExists) {
+              savedAccounts.push(accountData);
+              localStorage.setItem('sadeem_saved_accounts', JSON.stringify(savedAccounts));
+            } else {
+              // Update existing
+              const updatedAccounts = savedAccounts.map((acc: any) =>
+                acc.id === mappedUser.id ? accountData : acc
+              );
+              localStorage.setItem('sadeem_saved_accounts', JSON.stringify(updatedAccounts));
+            }
+          } catch (e) {
+            console.error("Failed to save account for switcher", e);
+          }
         } else {
            // Fallback if sync fails but we are logged in
            setUser({

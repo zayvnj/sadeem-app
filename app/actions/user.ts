@@ -115,7 +115,7 @@ export async function toggleVerification(userId: string) {
   }
 }
 
-export async function updateUserProfile(data: { fullName?: string, username?: string, bio?: string, avatarUrl?: string, isProfessional?: boolean, professionalCategory?: string }) {
+export async function updateUserProfile(data: { fullName?: string, username?: string, bio?: string, avatarUrl?: string, coverUrl?: string, isProfessional?: boolean, professionalCategory?: string }) {
   try {
     const session = await auth();
     if (!session?.user?.id) return { success: false, error: 'Unauthorized' };

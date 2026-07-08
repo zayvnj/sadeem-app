@@ -25,6 +25,7 @@ import { useTheme } from "next-themes"
 import { useStoryNavigation } from "./story/useStoryNavigation"
 import { ThemeToggle } from "./theme-toggle"
 import { supabase } from "@/lib/supabase"
+import { uploadMediaToSupabase } from "@/lib/supabase-storage"
 
 const tabs = [
   { icon: Grid3x3, key: "grid" },
@@ -169,15 +170,19 @@ export function ProfileView() {
         setCoverPreview(previewUrl)
         setIsUploadingCover(true)
 
-        // Mock upload delay
-        await new Promise(resolve => setTimeout(resolve, 1500))
+        const coverUrl = await uploadMediaToSupabase(compressed)
+        const res = await updateUserProfile({ coverUrl })
 
-        // In reality we would hit an upload API and then updateUserProfile
-        // For now, update local profile state
-        setProfile((prev: any) => prev ? { ...prev, coverImage: previewUrl } : prev)
-        toast.success("تم تحديث صورة الغلاف بنجاح")
+        if (res.success) {
+          setProfile((prev: any) => prev ? { ...prev, coverImage: coverUrl, coverUrl: coverUrl } : prev)
+          toast.success("تم تحديث صورة الغلاف بنجاح")
+        } else {
+          toast.error("فشل في تحديث صورة الغلاف")
+          setCoverPreview(profile?.coverImage || profile?.coverUrl || null)
+        }
       } catch (error) {
         toast.error("حدث خطأ أثناء تغيير صورة الغلاف")
+        setCoverPreview(profile?.coverImage || profile?.coverUrl || null)
       } finally {
         setIsUploadingCover(false)
       }
@@ -311,7 +316,10 @@ export function ProfileView() {
       <div className="absolute top-0 left-0 right-0 h-48 overflow-hidden z-0 pointer-events-none">
         <motion.div style={{ y: coverY }} className="w-full h-full relative">
           {coverPreview ? (
-            <img src={coverPreview} alt="Cover" className="w-full h-full object-cover" />
+            <>
+              <img src={coverPreview} alt="Cover" className="w-full h-full object-cover" />
+              <div className="absolute inset-0 bg-black/30" />
+            </>
           ) : (
             <div className="w-full h-full bg-gradient-to-br from-indigo-900 via-purple-900 to-black opacity-80" />
           )}

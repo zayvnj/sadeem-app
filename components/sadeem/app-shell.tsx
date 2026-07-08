@@ -9,6 +9,7 @@ import { toast } from 'sonner'
 import { useSession } from "@/lib/auth-context"
 import { updateLastActive } from "@/app/actions/user"
 import { BottomNav } from "./bottom-nav"
+import { AccountSwitcherSheet } from "./account-switcher-sheet"
 import { HomeFeed } from "./home-feed"
 import { ReelsView } from "./reels-view"
 import { MediaStudio } from "./media-studio"
@@ -43,6 +44,7 @@ function AppShellContent() {
   const loadingAuth = status === "loading"
   const user = session?.user || null
   const [isSingleChatOpen, setIsSingleChatOpen] = useState(false)
+  const [showAccountSwitcher, setShowAccountSwitcher] = useState(false)
   const { selectedUserId, setSelectedUserId, setShowCreatePost, showCreatePost } = useNavigation()
   const [isUploadingReel, setIsUploadingReel] = useState(false)
   const isReels = active === "reels"
@@ -199,9 +201,14 @@ function AppShellContent() {
             {/* Bottom navigation */}
             {!isSingleChatOpen && !selectedUserId && (
               <div className="shrink-0 overflow-visible relative z-50">
-                <BottomNav active={active} onChange={setActive} dark={isReels} />
+                <BottomNav active={active} onChange={setActive} dark={isReels} onAvatarLongPress={() => setShowAccountSwitcher(true)} />
               </div>
             )}
+
+            <AccountSwitcherSheet
+              isOpen={showAccountSwitcher}
+              onClose={() => setShowAccountSwitcher(false)}
+            />
           </div>
         </div>
       ) : null}

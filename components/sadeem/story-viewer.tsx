@@ -271,18 +271,18 @@ export function StoryViewer({ stories, initialStoryIndex = 0, onClose, onComplet
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
-            className="absolute inset-0 size-full"
+            className="absolute inset-0 size-full bg-black flex items-center justify-center"
           >
             {currentStory.media_url?.match(/\.(mp4|webm|ogg)$/i) ? (
               <video
                 src={currentStory.media_url}
-                className="size-full object-cover"
+                className="size-full object-contain"
                 autoPlay
                 playsInline
                 muted={false} // Allow audio if unmuted
               />
             ) : (
-              <img src={currentStory.media_url} alt="Story" className="size-full object-cover" />
+              <img src={currentStory.media_url} alt="Story" className="size-full object-contain" />
             )}
           </motion.div>
         </AnimatePresence>
