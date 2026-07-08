@@ -3,7 +3,7 @@
 import prisma from '@/lib/prisma';
 import { auth } from '@/lib/session';
 
-export async function getFeedPosts() {
+export async function getFeedPosts(cursor?: string) {
   try {
     const session = await auth();
     if (!session?.user?.id) return { success: false, error: 'Unauthorized' };
@@ -17,6 +17,8 @@ export async function getFeedPosts() {
     });
 
     const followingIds = following.map(f => f.followingId);
+
+    const limit = 10;
 
     // Fetch posts from following users + own posts
     const posts = await prisma.post.findMany({
@@ -41,8 +43,15 @@ export async function getFeedPosts() {
         }
       },
       orderBy: { createdAt: 'desc' },
-      take: 20
+      take: limit + 1,
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {})
     });
+
+    let nextCursor: string | null = null;
+    if (posts.length > limit) {
+      const nextItem = posts.pop();
+      nextCursor = nextItem?.id || null;
+    }
 
     const formattedPosts = posts.map(post => ({
       ...post,
@@ -55,19 +64,37 @@ export async function getFeedPosts() {
       created_at: post.createdAt,
     }));
 
-    return { success: true, data: formattedPosts };
+    return { success: true, data: formattedPosts, nextCursor };
   } catch (error) {
     console.error('Error fetching feed posts:', error);
     return { success: false, error: 'Failed to fetch feed posts' };
   }
 }
 
-export async function getExploreFeed() {
+export async function getExploreFeed(cursor?: string) {
   try {
     const session = await auth();
     const userId = session?.user?.id;
 
+    let excludedUserIds: string[] = [];
+
+    if (userId) {
+      // Get IDs of users the current user is following
+      const following = await prisma.follow.findMany({
+        where: { followerId: userId },
+        select: { followingId: true }
+      });
+      excludedUserIds = [...following.map(f => f.followingId), userId];
+    }
+
+    const limit = 20;
+
     const posts = await prisma.post.findMany({
+      where: userId ? {
+        userId: {
+          notIn: excludedUserIds
+        }
+      } : undefined,
       include: {
         user: {
           select: { id: true, username: true, avatarUrl: true, fullName: true, isVerified: true }
@@ -78,9 +105,16 @@ export async function getExploreFeed() {
         likes: userId ? { where: { userId } } : false,
         savedBy: userId ? { where: { userId } } : false
       },
-      orderBy: { createdAt: 'desc' },
-      take: 50
+      take: limit + 1,
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+      orderBy: { createdAt: 'desc' }
     });
+
+    let nextCursor: string | null = null;
+    if (posts.length > limit) {
+      const nextItem = posts.pop();
+      nextCursor = nextItem?.id || null;
+    }
 
     const formattedPosts = posts.map(post => ({
       ...post,
@@ -91,9 +125,10 @@ export async function getExploreFeed() {
       user_id: post.userId,
       media_url: post.mediaUrl,
       created_at: post.createdAt,
-    }));
+      popularity: post._count.likes + post._count.comments
+    })).sort((a, b) => b.popularity - a.popularity);
 
-    return { success: true, data: formattedPosts };
+    return { success: true, data: formattedPosts, nextCursor };
   } catch (error) {
     console.error('Error fetching explore feed:', error);
     return { success: false, error: 'Failed to fetch explore feed' };

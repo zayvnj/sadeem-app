@@ -173,9 +173,12 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
 
         {/* Parallax Cover Image Area */}
         <div className="absolute top-0 left-0 right-0 h-48 overflow-hidden z-0 pointer-events-none">
-          <motion.div style={{ y: coverY }} className="w-full h-full">
-            {profile?.coverImage ? (
-              <img src={profile.coverImage} alt="Cover" className="w-full h-full object-cover" />
+          <motion.div style={{ y: coverY }} className="w-full h-full relative">
+            {profile?.coverImage || profile?.coverUrl ? (
+              <>
+                <img src={profile.coverImage || profile.coverUrl} alt="Cover" className="w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-black/30" />
+              </>
             ) : (
               <div className="w-full h-full bg-gradient-to-br from-indigo-900 via-purple-900 to-black opacity-80" />
             )}

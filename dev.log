@@ -1,0 +1,31 @@
+
+> my-project@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.0.2:3000
+- Environments: .env
+✓ Ready in 527ms
+⚠ `eslint` configuration in next.config.mjs is no longer supported. See more info here: https://nextjs.org/docs/app/api-reference/cli/next#next-lint-options
+⚠ Invalid next.config.mjs options detected:
+⚠     Unrecognized key(s) in object: 'eslint'
+⚠ See more info here: https://nextjs.org/docs/messages/invalid-next-config
+Attention: Next.js now collects completely anonymous telemetry regarding usage.
+This information is used to shape Next.js' roadmap and prioritize features.
+You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+https://nextjs.org/telemetry
+
+
+  Using external babel configuration from /app/babel.config.js
+○ Compiling / ...
+ GET / 200 in 15.8s (next.js: 14.9s, application-code: 917ms)
+[browser] GoTrueClient@sb-placeholder-auth-token:1 (2.110.0) 2026-07-08T10:26:47.577Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key. (lib/supabase-storage.ts:6:37)
+ POST /api/auth/logout 200 in 2.3s (next.js: 2.2s, application-code: 71ms)
+ POST /api/auth/logout 200 in 2.3s (next.js: 2.3s, application-code: 45ms)
+✓ Compiled in 2.2s
+✓ Compiled in 387ms
+ GET / 200 in 658ms (next.js: 141ms, application-code: 517ms)
+[browser] GoTrueClient@sb-placeholder-auth-token:1 (2.110.0) 2026-07-08T10:45:32.923Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key. (lib/supabase-storage.ts:6:37)
+ POST /api/auth/logout 200 in 101ms (next.js: 79ms, application-code: 22ms)
+ POST /api/auth/logout 200 in 104ms (next.js: 88ms, application-code: 16ms)

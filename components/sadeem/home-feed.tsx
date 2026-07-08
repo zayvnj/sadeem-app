@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Loader2, BadgeCheck, Play, Sparkles } from "lucide-react"
 import { useSession } from "@/lib/auth-context"
-import { getFeedPosts, getReels, toggleLike } from "@/app/actions/post"
+import { getFeedPosts, getExploreFeed, getReels, toggleLike } from "@/app/actions/post"
 import { getStories } from "@/app/actions/story"
 import { useNavigation } from "./navigation-context"
 import { StoryViewer } from "./story-viewer"
@@ -70,18 +70,34 @@ export function HomeFeed() {
     staleTime: 60000,
   })
 
-  // 3. Fetch Posts (Infinite Scroll emulation for local db)
-  const fetchPostsPage = async ({ pageParam = 0 }) => {
-    const res = await getFeedPosts()
-    const allPosts = res.success && Array.isArray(res.data) ? res.data : []
+  // 3. Fetch Posts (Infinite Scroll DB Pagination)
+  const fetchPostsPage = async ({ pageParam }: { pageParam?: string }) => {
+    // If we are already paginating the fallback explore feed, just fetch explore feed
+    const isFetchingExplore = pageParam?.startsWith('explore_');
+    const actualCursor = isFetchingExplore ? pageParam.replace('explore_', '') : pageParam;
 
-    // Simulate pagination locally since Prisma returns all for now based on following
-    const start = pageParam * 10
-    const end = start + 10
-    const pagedData = allPosts.slice(start, end)
+    let res = isFetchingExplore ? await getExploreFeed(actualCursor) : await getFeedPosts(actualCursor)
+    let allPosts = res.success && Array.isArray(res.data) ? res.data : []
+    let nextCursor = res.success ? (res as any).nextCursor : null
+
+    // If the feed is empty (on first page), fallback to explore feed
+    if (allPosts.length === 0 && !pageParam) {
+      res = await getExploreFeed(actualCursor)
+      allPosts = res.success && Array.isArray(res.data) ? res.data : []
+      nextCursor = res.success ? (res as any).nextCursor : null
+      // Note: we can add a flag to indicate these are suggested posts
+      allPosts = allPosts.map(post => ({ ...post, isSuggested: true }))
+    } else if (isFetchingExplore) {
+      allPosts = allPosts.map(post => ({ ...post, isSuggested: true }))
+    }
+
+    // Wrap cursor to indicate it belongs to the explore feed if we are in fallback mode
+    if (nextCursor && (isFetchingExplore || (allPosts.length > 0 && allPosts[0].isSuggested))) {
+        nextCursor = `explore_${nextCursor}`
+    }
 
     // Map to expected structure for UI compatibility
-    const formattedPosts = pagedData.map(post => ({
+    const formattedPosts = allPosts.map(post => ({
       ...post,
       users: post.user,
       likes_count: post.likesCount,
@@ -91,7 +107,7 @@ export function HomeFeed() {
 
     return {
       data: formattedPosts,
-      nextCursor: formattedPosts.length === 10 ? pageParam + 10 : null
+      nextCursor: nextCursor
     }
   }
 
@@ -106,7 +122,7 @@ export function HomeFeed() {
     queryFn: fetchPostsPage,
     enabled: !!currentUser,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
-    initialPageParam: 0,
+    initialPageParam: undefined as string | undefined,
     staleTime: 60000,
   })
 
@@ -510,6 +526,15 @@ export function HomeFeed() {
              </div>
           )}
 
+          {posts.length > 0 && posts[0]?.isSuggested && (
+            <div className="px-4 pb-2 mb-2">
+              <div className="bg-secondary/50 rounded-xl p-4 flex flex-col items-center text-center gap-2 border border-border">
+                <Sparkles className="size-8 text-primary" />
+                <h3 className="font-bold text-foreground">مرحباً بك في سديم!</h3>
+                <p className="text-sm text-muted-foreground">أنت لا تتابع أحداً بعد. إليك بعض المنشورات المقترحة لك، قم بمتابعة بعض الأشخاص لملء يومياتك.</p>
+              </div>
+            </div>
+          )}
           {posts.length > 0 ? posts.map((post: any) => {
             const user = post.users
 

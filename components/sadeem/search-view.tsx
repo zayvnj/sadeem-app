@@ -10,33 +10,51 @@ import { VerifiedBadge } from "./verified-badge"
 import { useDebounce } from "use-debounce"
 import { useSession } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
+import { useInfiniteQuery } from "@tanstack/react-query"
+import { useInView } from "react-intersection-observer"
 
 export function SearchView() {
   const [query, setQuery] = useState("")
   const [debouncedQuery] = useDebounce(query, 500)
   const [results, setResults] = useState<any[]>([])
-  const [explorePosts, setExplorePosts] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
-  const [loadingExplore, setLoadingExplore] = useState(true)
   const { setSelectedUserId } = useNavigation()
   const { data: session } = useSession()
   const currentUser = session?.user
 
-  useEffect(() => {
-    async function fetchExploreFeed() {
-      try {
-        const res = await getExploreFeed()
-        if (res.success && res.data) {
-          setExplorePosts(res.data)
-        }
-      } catch (error) {
-        console.error("Explore feed error:", error)
-      } finally {
-        setLoadingExplore(false)
-      }
+  const fetchExplorePage = async ({ pageParam }: { pageParam?: string }) => {
+    const res = await getExploreFeed(pageParam)
+    if (!res.success) throw new Error("Failed to load explore feed")
+    return {
+      data: res.data || [],
+      nextCursor: (res as any).nextCursor || null
     }
-    fetchExploreFeed()
-  }, [])
+  }
+
+  const {
+    data: exploreData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    status: exploreStatus
+  } = useInfiniteQuery({
+    queryKey: ['explore', 'posts'],
+    queryFn: fetchExplorePage,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    initialPageParam: undefined as string | undefined,
+    staleTime: 60000,
+  })
+
+  const { ref: loadMoreRef, inView } = useInView()
+
+  useEffect(() => {
+    if (inView && hasNextPage) {
+      fetchNextPage()
+    }
+  }, [inView, hasNextPage, fetchNextPage])
+
+  const explorePosts = exploreData?.pages.flatMap(page => page.data) || []
+  const loadingExplore = exploreStatus === 'pending'
 
   useEffect(() => {
     async function performSearch() {
@@ -88,6 +106,7 @@ export function SearchView() {
               <Loader2 className="size-8 animate-spin text-muted-foreground" />
             </div>
           ) : explorePosts.length > 0 ? (
+            <>
             <div className="grid grid-cols-3 gap-1">
               {explorePosts.map((post) => (
                 <div
@@ -145,6 +164,18 @@ export function SearchView() {
                 </div>
               ))}
             </div>
+
+            {/* Infinite Scroll trigger area */}
+            {hasNextPage && (
+              <div ref={loadMoreRef} className="py-8 flex justify-center w-full">
+                {isFetchingNextPage ? (
+                  <Loader2 className="size-6 animate-spin text-muted-foreground" />
+                ) : (
+                  <div className="h-6" /> /* Spacing for the observer */
+                )}
+              </div>
+            )}
+            </>
           ) : (
             <div className="flex flex-col items-center justify-center h-40 text-muted-foreground space-y-4">
               <Search className="size-12 opacity-20" />
