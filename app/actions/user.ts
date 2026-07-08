@@ -146,7 +146,9 @@ export async function updateUserProfile(data: { fullName?: string, username?: st
     if (error?.code === 'P2002' && error?.meta?.target?.includes('username')) {
       return { success: false, error: 'اسم المستخدم هذا محجوز مسبقاً، يرجى اختيار اسم آخر' };
     }
-    return { success: false, error: 'Failed to update profile' };
+    // Return detailed error message for UI feedback instead of generic string
+    const errorMessage = error instanceof Error ? error.message : typeof error === 'string' ? error : JSON.stringify(error);
+    return { success: false, error: errorMessage || 'Failed to update profile' };
   }
 }
 
