@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useRef } from "react"
 import { motion, useScroll, useTransform } from "framer-motion"
-import { Settings, Grid3x3, Film, Bookmark, Bell, Moon, Shield, LogOut, Loader2, User, Camera, Trash2, BadgeCheck, X, ChevronLeft, UserX, BarChart3, TrendingUp, Users, Eye } from "lucide-react"
+import { Settings, Grid3x3, Film, Bookmark, Bell, Moon, Shield, LogOut, Loader2, User, Camera, Trash2, BadgeCheck, X, ChevronLeft, UserX, BarChart3, TrendingUp, Users, Eye, History } from "lucide-react"
 import { useSession } from "@/lib/auth-context"
 import { getUserProfile, updateUserProfile, getUserPosts, deleteUserAccount, getSavedPosts } from "@/app/actions/user"
+import { getStoryArchive } from "@/app/actions/story"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Switch } from "@/components/ui/switch"
 import {
@@ -32,6 +33,7 @@ const tabs = [
   { icon: Grid3x3, key: "grid" },
   { icon: Film, key: "reels" },
   { icon: Bookmark, key: "saved" },
+  { icon: History, key: "archive" },
 ]
 
 
@@ -54,6 +56,8 @@ export function ProfileView() {
   const [posts, setPosts] = useState<any[]>([])
   const [savedPosts, setSavedPosts] = useState<any[]>([])
   const [loadingSaved, setLoadingSaved] = useState(false)
+  const [archiveStories, setArchiveStories] = useState<any[]>([])
+  const [loadingArchive, setLoadingArchive] = useState(false)
 
   const [editFullName, setEditFullName] = useState("")
   const [editUsername, setEditUsername] = useState("")
@@ -127,6 +131,18 @@ export function ProfileView() {
           setSavedPosts(res.data)
         }
         setLoadingSaved(false)
+      })
+    }
+  }, [activeTab])
+
+  useEffect(() => {
+    if (activeTab === "archive" && archiveStories.length === 0) {
+      setLoadingArchive(true)
+      getStoryArchive().then(res => {
+        if (res.success && res.data) {
+          setArchiveStories(res.data)
+        }
+        setLoadingArchive(false)
       })
     }
   }, [activeTab])
@@ -717,6 +733,50 @@ export function ProfileView() {
             <div className="col-span-3 flex flex-col items-center justify-center text-sm text-muted-foreground py-10 gap-2">
               <Bookmark className="size-8 opacity-20" />
               لا توجد محفوظات حتى الآن
+            </div>
+          )
+        )}
+
+        {activeTab === "archive" && (
+          loadingArchive ? (
+            <div className="col-span-3 flex items-center justify-center py-10">
+              <Loader2 className="size-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : archiveStories.length > 0 ? (
+            archiveStories.map((story) => (
+              <motion.div
+                key={story.id}
+                variants={item}
+                className="aspect-[9/16] rounded-2xl group relative cursor-pointer hover:scale-[0.98] transition-all duration-300 bg-gradient-to-br from-muted to-secondary border border-border/50 overflow-hidden shadow-sm hover:shadow-xl hover:border-foreground/20"
+                onClick={() => {
+                  if (story.mediaUrl && !story.mediaUrl.match(/\.(mp4|webm|ogg)$/i)) {
+                    setActiveLightboxImage(story.mediaUrl)
+                  }
+                }}
+              >
+                {story.mediaUrl && (
+                  story.mediaUrl.match(/\.(mp4|webm|ogg)$/i) ? (
+                    <video src={story.mediaUrl} className="size-full object-cover" />
+                  ) : (
+                    <img src={story.mediaUrl} alt="Story" className="size-full object-cover" />
+                  )
+                )}
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-2 pointer-events-none">
+                  <p className="text-[10px] text-white font-semibold text-center">
+                    {new Date(story.createdAt).toLocaleDateString("ar", { day: "numeric", month: "short" })}
+                  </p>
+                </div>
+              </motion.div>
+            ))
+          ) : (
+            <div className="col-span-3 flex flex-col items-center justify-center text-sm text-muted-foreground py-16 gap-4 px-8 text-center">
+              <div className="size-20 rounded-full border-2 border-foreground flex items-center justify-center mb-2">
+                <History className="size-10 text-foreground" />
+              </div>
+              <h3 className="text-xl font-bold text-foreground">أرشيف القصص</h3>
+              <p className="text-muted-foreground/80 leading-relaxed text-sm">
+                ستظهر هنا جميع القصص التي شاركتها سابقاً، حتى بعد انتهاء صلاحيتها.
+              </p>
             </div>
           )
         )}

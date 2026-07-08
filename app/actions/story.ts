@@ -206,6 +206,49 @@ export async function getStoryViewers(storyId: string) {
   }
 }
 
+export async function getStoryArchive(cursor?: string) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) return { success: false, error: 'Unauthorized' };
+
+    const userId = session.user.id;
+    const limit = 30;
+
+    // Fetch ALL of the current user's stories, including expired ones (archive)
+    const stories = await prisma.story.findMany({
+      where: { userId },
+      include: {
+        _count: { select: { likes: true, views: true } }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit + 1,
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {})
+    });
+
+    let nextCursor: string | null = null;
+    if (stories.length > limit) {
+      const nextItem = stories.pop();
+      nextCursor = nextItem?.id || null;
+    }
+
+    const now = new Date();
+    const formatted = stories.map(story => ({
+      id: story.id,
+      mediaUrl: story.mediaUrl,
+      createdAt: story.createdAt,
+      expiresAt: story.expiresAt,
+      isExpired: story.expiresAt < now,
+      likesCount: story._count.likes,
+      viewsCount: story._count.views
+    }));
+
+    return { success: true, data: formatted, nextCursor };
+  } catch (error) {
+    console.error('Error fetching story archive:', error);
+    return { success: false, error: 'Failed to fetch story archive' };
+  }
+}
+
 export async function deleteStory(storyId: string) {
   try {
     const session = await auth();
