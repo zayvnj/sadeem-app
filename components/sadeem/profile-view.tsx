@@ -26,6 +26,7 @@ import { useStoryNavigation } from "./story/useStoryNavigation"
 import { ThemeToggle } from "./theme-toggle"
 import { supabase } from "@/lib/supabase"
 import { uploadMediaToSupabase } from "@/lib/supabase-storage"
+import { FullScreenImageViewer } from "./full-screen-image-viewer"
 
 const tabs = [
   { icon: Grid3x3, key: "grid" },
@@ -46,6 +47,7 @@ const item = {
 export function ProfileView() {
   const { theme, setTheme } = useTheme()
   const [activeTab, setActiveTab] = useState("grid")
+  const [activeLightboxImage, setActiveLightboxImage] = useState<string | null>(null)
   const [isEditSheetOpen, setIsEditSheetOpen] = useState(false)
 
   const [profile, setProfile] = useState<any>(null)
@@ -171,16 +173,21 @@ export function ProfileView() {
         setIsUploadingCover(true)
 
         const coverUrl = await uploadMediaToSupabase(compressed)
+
+        // Ensure both fields might be updated depending on what the backend requires.
+        // Our schema has both coverImage and coverUrl. We'll pass coverUrl which is mapped in updateUserProfile.
         const res = await updateUserProfile({ coverUrl })
 
         if (res.success) {
           setProfile((prev: any) => prev ? { ...prev, coverImage: coverUrl, coverUrl: coverUrl } : prev)
           toast.success("تم تحديث صورة الغلاف بنجاح")
+          updateSession()
         } else {
           toast.error("فشل في تحديث صورة الغلاف")
           setCoverPreview(profile?.coverImage || profile?.coverUrl || null)
         }
       } catch (error) {
+        console.error("Cover upload error:", error)
         toast.error("حدث خطأ أثناء تغيير صورة الغلاف")
         setCoverPreview(profile?.coverImage || profile?.coverUrl || null)
       } finally {
@@ -651,6 +658,11 @@ export function ProfileView() {
                 key={post.id}
                 variants={item}
                 className="aspect-[4/5] rounded-2xl group relative cursor-pointer hover:scale-[0.98] transition-all duration-300 bg-gradient-to-br from-muted to-secondary border border-border/50 overflow-hidden shadow-sm hover:shadow-xl hover:border-foreground/20"
+                onClick={() => {
+                  if (post.media_url && !post.media_url.match(/\.(mp4|webm|ogg)$/i)) {
+                    setActiveLightboxImage(post.media_url)
+                  }
+                }}
               >
                 {post.media_url && (
                   post.media_url.match(/\.(mp4|webm|ogg)$/i) ? (
@@ -718,6 +730,11 @@ export function ProfileView() {
           </div>
         )}
       </motion.div>
+
+      <FullScreenImageViewer
+        imageUrl={activeLightboxImage}
+        onClose={() => setActiveLightboxImage(null)}
+      />
     </div>
   )
 }

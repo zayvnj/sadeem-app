@@ -101,7 +101,14 @@ export function HomeFeed() {
     // Map to expected structure for UI compatibility
     const formattedPosts = allPosts.map(post => ({
       ...post,
-      users: post.user,
+      user_id: post.userId,
+      media_url: post.mediaUrl,
+      text: post.caption,
+      users: {
+        ...post.user,
+        avatar_url: post.user?.avatarUrl,
+        full_name: post.user?.fullName
+      },
       likes_count: post.likesCount,
       comments_count: post.commentsCount,
       isLiked: post.isLiked

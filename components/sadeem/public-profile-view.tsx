@@ -12,6 +12,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { FollowButton } from "./follow-button"
 import { VerifiedBadge } from "./verified-badge"
 import { useRouter } from "next/navigation"
+import { FullScreenImageViewer } from "./full-screen-image-viewer"
 
 interface PublicProfileViewProps {
   userId: string
@@ -34,6 +35,7 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
   const [followersCount, setFollowersCount] = useState(0)
   const [followingCount, setFollowingCount] = useState(0)
   const [activeTab, setActiveTab] = useState("grid")
+  const [activeLightboxImage, setActiveLightboxImage] = useState<string | null>(null)
   const { data: session } = useSession()
   const currentUser = session?.user
   const queryClient = useQueryClient()
@@ -286,6 +288,11 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
             <div
               key={post.id}
               className="aspect-[4/5] rounded-2xl group relative cursor-pointer hover:scale-[0.98] transition-all duration-300 bg-gradient-to-br from-muted to-secondary border border-border/50 overflow-hidden shadow-sm hover:shadow-xl hover:border-foreground/20"
+              onClick={() => {
+                if (post.media_url && !post.media_url.match(/\.(mp4|webm|ogg)$/i)) {
+                  setActiveLightboxImage(post.media_url)
+                }
+              }}
             >
               {post.media_url && (
                 post.media_url.match(/\.(mp4|webm|ogg)$/i) ? (
@@ -304,6 +311,11 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
 
         <div className="h-20" /> {/* Padding for bottom */}
       </div>
+
+      <FullScreenImageViewer
+        imageUrl={activeLightboxImage}
+        onClose={() => setActiveLightboxImage(null)}
+      />
     </motion.div>
   )
 }
