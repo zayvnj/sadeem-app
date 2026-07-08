@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'Sadeem',
   webDir: 'public',
   server: {
-    url: 'https://ls-projects.vercel.app',
+    url: 'https://zainsa.vercel.app',
     cleartext: true
   },
   plugins: {
