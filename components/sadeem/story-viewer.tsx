@@ -2,18 +2,20 @@
 
 import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Send, Trash2, Eye } from "lucide-react"
+import { X, Send, Trash2, Eye, Heart } from "lucide-react"
 import { useSession } from "@/lib/auth-context"
 import { sendMessage } from "@/app/actions/chat"
-import { markStoryAsViewed, deleteStory, getStoryViewers } from "@/app/actions/story"
+import { markStoryAsViewed, deleteStory, getStoryViewers, toggleStoryLike } from "@/app/actions/story"
 import { toast } from "sonner"
-import { useQueryClient } from "@tanstack/react-query"
+import { useQueryClient, useMutation } from "@tanstack/react-query"
 
 interface Story {
   id: string
   user_id: string
   media_url: string
   created_at: string
+  isLiked?: boolean
+  likesCount?: number
   users?: {
     id: string
     full_name?: string
@@ -119,6 +121,63 @@ export function StoryViewer({ stories, initialStoryIndex = 0, onClose, onComplet
   const { data: session } = useSession()
   const currentUser = session?.user
 
+  // Toggle Like Mutation
+  const toggleLikeMutation = useMutation({
+    mutationFn: async ({ storyId }: { storyId: string }) => {
+      const res = await toggleStoryLike(storyId)
+      if (!res.success) throw new Error(res.error)
+      return res.data
+    },
+    onMutate: async ({ storyId }) => {
+      await queryClient.cancelQueries({ queryKey: ['feed', 'stories'] })
+      const previousStories = queryClient.getQueryData(['feed', 'stories'])
+
+      queryClient.setQueryData(['feed', 'stories'], (old: any) => {
+        if (!old) return old
+        return old.map((userGroup: any) => {
+          // Find if this group has the story
+          let groupStories = userGroup.stories || (Array.isArray(userGroup) ? userGroup : [])
+
+          let storyIndex = groupStories.findIndex((s: any) => s.id === storyId)
+          if (storyIndex >= 0) {
+            const updatedStories = [...groupStories]
+            const isCurrentlyLiked = updatedStories[storyIndex].isLiked
+            updatedStories[storyIndex] = {
+              ...updatedStories[storyIndex],
+              isLiked: !isCurrentlyLiked,
+              likesCount: !isCurrentlyLiked
+                ? (updatedStories[storyIndex].likesCount || 0) + 1
+                : Math.max(0, (updatedStories[storyIndex].likesCount || 1) - 1)
+            }
+
+            if (userGroup.stories) {
+               return { ...userGroup, stories: updatedStories }
+            }
+            return updatedStories
+          }
+          return userGroup
+        })
+      })
+      return { previousStories }
+    },
+    onError: (err, variables, context: any) => {
+      if (context?.previousStories) {
+        queryClient.setQueryData(['feed', 'stories'], context.previousStories)
+      }
+      toast.error("حدث خطأ")
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['feed', 'stories'] })
+    }
+  })
+
+  const handleLike = () => {
+    if (!currentUser) return toast.error("يجب تسجيل الدخول")
+    if (currentStory) {
+      toggleLikeMutation.mutate({ storyId: currentStory.id })
+    }
+  }
+
   const [isDeleting, setIsDeleting] = useState(false)
   const [showViewers, setShowViewers] = useState(false)
   const [viewers, setViewers] = useState<any[]>([])
@@ -191,7 +250,7 @@ export function StoryViewer({ stories, initialStoryIndex = 0, onClose, onComplet
       initial={{ opacity: 0, y: 50 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 50 }}
-      className="fixed inset-0 h-[100dvh] z-[100] bg-black text-white flex flex-col"
+      className="fixed inset-0 h-[100dvh] z-[120] bg-black text-white flex flex-col"
     >
       {/* Dark gradient for Header visibility */}
       <div className="absolute top-0 inset-x-0 h-32 bg-gradient-to-b from-black/80 to-transparent pointer-events-none z-10" />
@@ -324,9 +383,10 @@ export function StoryViewer({ stories, initialStoryIndex = 0, onClose, onComplet
                 className="flex-1 rounded-full border border-white/30 bg-black/40 px-5 py-3.5 text-sm text-white backdrop-blur-md outline-none placeholder:text-white/60 focus:border-white focus:bg-black/60 transition-all"
                 dir="auto"
               />
-              <AnimatePresence>
-                {replyText.trim() && (
+              <AnimatePresence mode="popLayout">
+                {replyText.trim() ? (
                   <motion.button
+                    key="send"
                     initial={{ scale: 0, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     exit={{ scale: 0, opacity: 0 }}
@@ -335,6 +395,18 @@ export function StoryViewer({ stories, initialStoryIndex = 0, onClose, onComplet
                     className="size-12 rounded-full bg-white flex items-center justify-center text-black shadow-lg disabled:opacity-50 shrink-0"
                   >
                     {isSending ? <span className="size-5 border-2 border-black border-t-transparent rounded-full animate-spin" /> : <Send className="size-5 -ml-1" />}
+                  </motion.button>
+                ) : (
+                  <motion.button
+                    key="like"
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0, opacity: 0 }}
+                    type="button"
+                    onClick={handleLike}
+                    className="size-12 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white shrink-0 hover:bg-black/60 transition-colors"
+                  >
+                    <Heart className={`size-6 ${currentStory.isLiked ? 'fill-red-500 text-red-500' : 'text-white'}`} />
                   </motion.button>
                 )}
               </AnimatePresence>

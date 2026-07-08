@@ -353,41 +353,6 @@ export function HomeFeed() {
         onClose={() => setActiveLightboxImage(null)}
       />
 
-      {/* Story Viewer Overlay */}
-      <AnimatePresence>
-        {storyViewerData && (
-          <StoryViewer
-            stories={storyViewerData.stories}
-            initialStoryIndex={storyViewerData.initialIndex}
-            onClose={() => {
-              setStoryViewerData(null)
-              refetchStories() // Refresh to update seen states
-            }}
-            onComplete={() => {
-              // Find the index of the current user's stories in the main stories array
-              const currentUserStoriesIndex = stories.findIndex(
-                (userGroup: any) => userGroup[0].user_id === storyViewerData.stories[0].user_id
-              )
-
-              if (currentUserStoriesIndex >= 0 && currentUserStoriesIndex < stories.length - 1) {
-                // Auto-advance to the next user's stories
-                const nextUserStories = stories[currentUserStoriesIndex + 1] as any[]
-                const firstUnseenIndex = nextUserStories.findIndex((s: any) => !viewedStoryIds.has(s.id))
-
-                setStoryViewerData({
-                  stories: nextUserStories,
-                  initialIndex: firstUnseenIndex >= 0 ? firstUnseenIndex : 0
-                })
-              } else {
-                // We reached the end of all stories, close viewer
-                setStoryViewerData(null)
-                refetchStories()
-              }
-            }}
-          />
-        )}
-      </AnimatePresence>
-
       {/* Pull to refresh indicator - Moved z-index logic so it doesn't block interactions when idle */}
       <motion.div
         className={`absolute top-0 left-0 right-0 flex justify-center pointer-events-none ${

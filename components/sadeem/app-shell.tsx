@@ -16,6 +16,8 @@ import { MediaStudio } from "./media-studio"
 import { ChatView } from "./chat-view"
 import { ProfileView } from "./profile-view"
 import { PublicProfileView } from "./public-profile-view"
+import { StoryViewer } from "./story-viewer"
+import { useQueryClient } from "@tanstack/react-query"
 import { AuthView } from "./auth-view"
 import { NotificationsView } from "./notifications-view"
 import { AIAssistantView } from "./ai-assistant-view"
@@ -45,9 +47,10 @@ function AppShellContent() {
   const user = session?.user || null
   const [isSingleChatOpen, setIsSingleChatOpen] = useState(false)
   const [showAccountSwitcher, setShowAccountSwitcher] = useState(false)
-  const { selectedUserId, setSelectedUserId, setShowCreatePost, showCreatePost } = useNavigation()
+  const { selectedUserId, setSelectedUserId, setShowCreatePost, showCreatePost, storyViewerData, setStoryViewerData } = useNavigation()
   const [isUploadingReel, setIsUploadingReel] = useState(false)
   const isReels = active === "reels"
+  const queryClient = useQueryClient()
 
   const [backPressCount, setBackPressCount] = useState(0)
 
@@ -209,6 +212,43 @@ function AppShellContent() {
               isOpen={showAccountSwitcher}
               onClose={() => setShowAccountSwitcher(false)}
             />
+
+            {/* Story Viewer Global Overlay */}
+            <AnimatePresence>
+              {storyViewerData && (
+                <StoryViewer
+                  stories={storyViewerData.stories}
+                  initialStoryIndex={storyViewerData.initialIndex}
+                  onClose={() => {
+                    setStoryViewerData(null)
+                    queryClient.invalidateQueries({ queryKey: ['feed', 'stories'] })
+                  }}
+                  onComplete={() => {
+                    // Try to auto-advance to next user's stories if available
+                    // We need to fetch current stories from cache to know the order
+                    const cachedStories: any[] = queryClient.getQueryData(['feed', 'stories']) || []
+                    const currentUserStoriesIndex = cachedStories.findIndex(
+                      (userGroup: any) => userGroup[0]?.user_id === storyViewerData.stories[0].user_id || userGroup.id === storyViewerData.stories[0].user_id
+                    )
+
+                    if (currentUserStoriesIndex >= 0 && currentUserStoriesIndex < cachedStories.length - 1) {
+                      const nextUserGroup = cachedStories[currentUserStoriesIndex + 1]
+                      // handle both array and object formats
+                      const nextUserStories = Array.isArray(nextUserGroup) ? nextUserGroup : (nextUserGroup.stories || [])
+                      const firstUnseenIndex = nextUserStories.findIndex((s: any) => !s.isViewed)
+
+                      setStoryViewerData({
+                        stories: nextUserStories,
+                        initialIndex: firstUnseenIndex >= 0 ? firstUnseenIndex : 0
+                      })
+                    } else {
+                      setStoryViewerData(null)
+                      queryClient.invalidateQueries({ queryKey: ['feed', 'stories'] })
+                    }
+                  }}
+                />
+              )}
+            </AnimatePresence>
           </div>
         </div>
       ) : null}

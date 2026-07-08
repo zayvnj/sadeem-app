@@ -103,6 +103,7 @@ model Story {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   views StoryView[]
+  likes Like[]
 }
 
 // جدول مشاهدات القصص
@@ -149,8 +150,12 @@ model Like {
   reelId String?
   reel   Reel?   @relation(fields: [reelId], references: [id], onDelete: Cascade)
 
+  storyId String?
+  story   Story?  @relation(fields: [storyId], references: [id], onDelete: Cascade)
+
   @@unique([userId, postId]) // يمنع إعطاء لايكين من نفس الشخص لنفس المنشور
   @@unique([userId, reelId]) // يمنع إعطاء لايكين من نفس الشخص لنفس الريل
+  @@unique([userId, storyId]) // يمنع إعطاء لايكين من نفس الشخص لنفس القصة
 }
 
 // جدول المحفوظات (Saved Posts)
