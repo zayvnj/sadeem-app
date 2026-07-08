@@ -90,6 +90,8 @@ model Post {
   comments Comment[]
   likes    Like[]
   savedBy  SavedPost[]
+
+  @@index([userId, createdAt]) // تسريع استعلام الصفحة الرئيسية
 }
 
 // جدول الستوريات (القصص اليومية)
@@ -104,6 +106,9 @@ model Story {
 
   views StoryView[]
   likes Like[]
+
+  @@index([userId, createdAt]) // تسريع استعلام أرشيف القصص
+  @@index([expiresAt]) // تسريع فلترة القصص النشطة
 }
 
 // جدول مشاهدات القصص

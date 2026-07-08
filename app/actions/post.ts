@@ -26,7 +26,7 @@ export async function getFeedPosts(cursor?: string) {
         userId: {
           in: [...followingIds, userId]
         },
-        mediaType: 'IMAGE' // Only images for main feed
+        mediaType: { in: ['IMAGE', 'VIDEO'] } // Images and videos in main feed; REELs have their own tab
       },
       include: {
         user: {
@@ -90,11 +90,10 @@ export async function getExploreFeed(cursor?: string) {
     const limit = 20;
 
     const posts = await prisma.post.findMany({
-      where: userId ? {
-        userId: {
-          notIn: excludedUserIds
-        }
-      } : undefined,
+      where: {
+        mediaType: { in: ['IMAGE', 'VIDEO'] }, // Exclude REELs from explore/home fallback feed
+        ...(userId ? { userId: { notIn: excludedUserIds } } : {})
+      },
       include: {
         user: {
           select: { id: true, username: true, avatarUrl: true, fullName: true, isVerified: true }
