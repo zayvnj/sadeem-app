@@ -28,6 +28,9 @@ export async function getStories() {
       include: {
         user: {
           select: { id: true, username: true, avatarUrl: true, fullName: true }
+        },
+        _count: {
+          select: { likes: true }
         }
       },
       orderBy: { createdAt: 'asc' } // Oldest first within a user's group
@@ -42,6 +45,15 @@ export async function getStories() {
       }
     });
     const viewedStoryIds = new Set(viewedStories.map(v => v.storyId));
+
+    // Fetch likes for these stories by the current user
+    const likedStories = await prisma.like.findMany({
+      where: {
+        userId: userId,
+        storyId: { in: storyIds }
+      }
+    });
+    const likedStoryIds = new Set(likedStories.map(l => l.storyId));
 
     // Group stories by user
     const groupedStories = activeStories.reduce((acc: any, story) => {
@@ -64,7 +76,9 @@ export async function getStories() {
         mediaUrl: story.mediaUrl,
         createdAt: story.createdAt,
         expiresAt: story.expiresAt,
-        isViewed: isViewed
+        isViewed: isViewed,
+        isLiked: likedStoryIds.has(story.id),
+        likesCount: story._count.likes
       });
       return acc;
     }, {});
@@ -124,6 +138,49 @@ export async function markStoryAsViewed(storyId: string) {
   } catch (error) {
     console.error('Error marking story as viewed:', error);
     return { success: false, error: 'Failed to mark story as viewed' };
+  }
+}
+
+export async function toggleStoryLike(storyId: string) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) return { success: false, error: 'Unauthorized' };
+
+    const userId = session.user.id;
+
+    const existingLike = await prisma.like.findUnique({
+      where: {
+        userId_storyId: { userId, storyId }
+      }
+    });
+
+    if (existingLike) {
+      await prisma.like.delete({
+        where: { id: existingLike.id }
+      });
+      return { success: true, data: { isLiked: false } };
+    } else {
+      await prisma.like.create({
+        data: { userId, storyId }
+      });
+
+      // Optional: create notification for story owner
+      const story = await prisma.story.findUnique({ where: { id: storyId }, select: { userId: true } });
+      if (story && story.userId !== userId) {
+         await prisma.notification.create({
+           data: {
+             userId: story.userId,
+             type: 'LIKE',
+             content: `${session.user.name || (session.user as any).username} أعجب بقصتك.`
+           }
+         });
+      }
+
+      return { success: true, data: { isLiked: true } };
+    }
+  } catch (error) {
+    console.error('Error toggling story like:', error);
+    return { success: false, error: 'Failed to toggle like' };
   }
 }
 
