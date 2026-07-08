@@ -183,12 +183,14 @@ export function ProfileView() {
           toast.success("تم تحديث صورة الغلاف بنجاح")
           updateSession()
         } else {
-          toast.error("فشل في تحديث صورة الغلاف")
+          console.error("Cover upload backend error:", res.error)
+          toast.error(res.error || "فشل في تحديث صورة الغلاف")
           setCoverPreview(profile?.coverImage || profile?.coverUrl || null)
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Cover upload error:", error)
-        toast.error("حدث خطأ أثناء تغيير صورة الغلاف")
+        const errMsg = error instanceof Error ? error.message : typeof error === 'string' ? error : "فشل في رفع صورة الغلاف";
+        toast.error(errMsg)
         setCoverPreview(profile?.coverImage || profile?.coverUrl || null)
       } finally {
         setIsUploadingCover(false)
@@ -255,7 +257,8 @@ export function ProfileView() {
 
       if (!res.success) {
         console.error("Profile update error:", res.error)
-        setEditError(res.error || "حدث خطأ أثناء حفظ الملف الشخصي")
+        const errMsg = typeof res.error === 'string' ? res.error : JSON.stringify(res.error);
+        setEditError(errMsg || "حدث خطأ أثناء حفظ الملف الشخصي")
         setEditLoading(false)
         return
       }
