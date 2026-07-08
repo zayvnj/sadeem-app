@@ -8,6 +8,7 @@ import { useSession } from "@/lib/auth-context"
 import { getChats, getMessages, sendMessage as sendMessageAction } from "@/app/actions/chat"
 import { useNavigation } from "./navigation-context"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { supabase } from "@/lib/supabase"
 import { useRouter, useSearchParams } from "next/navigation"
 
 const container = {
@@ -135,17 +136,31 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps) {
     networkMode: 'offlineFirst',
   })
 
-  // Simulate real-time by polling
+  // Supabase real-time subscription for messages and chats
   useEffect(() => {
     if (!currentUser) return;
-    const interval = setInterval(() => {
-      queryClient.invalidateQueries({ queryKey: ['chats', currentUser.id] })
-      if (activeChat?.user?.id) {
-         queryClient.invalidateQueries({ queryKey: ['messages', activeChat.user.id] })
-      }
-    }, 5000)
-    return () => clearInterval(interval)
-  }, [currentUser, queryClient, activeChat])
+
+    // Subscribe to new messages
+    const messageSubscription = supabase
+      .channel('public:Message')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'Message' }, payload => {
+        // Find if this message belongs to the currently active chat
+        // (This assumes we can match by chat ID or just invalidate everything to be safe/lazy)
+        // Since we don't have activeChat.chatId strictly available in activeChat,
+        // we'll just invalidate the active chat's messages
+        if (activeChat?.user?.id) {
+          queryClient.invalidateQueries({ queryKey: ['messages', activeChat.user.id] })
+        }
+
+        // Always invalidate the chats list so the newest message text/timestamp updates in the inbox
+        queryClient.invalidateQueries({ queryKey: ['chats', currentUser.id] })
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(messageSubscription);
+    };
+  }, [currentUser, queryClient, activeChat?.user?.id])
 
   // Placeholder for local search
   useEffect(() => {
@@ -224,21 +239,29 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps) {
       created_at: new Date().toISOString()
     }
 
+    // Clear UI state immediately for responsive feel
+    setNewMessage("")
+    setReplyingTo(null)
+
     try {
       // Optimistic update
       queryClient.setQueryData(['messages', activeChat.user.id], (old: any) => {
         return [...(old || []), tempMessage]
       })
 
+      // Also invalidate chats to bump this chat to the top
+      queryClient.invalidateQueries({ queryKey: ['chats'] })
+
       const res = await sendMessageAction(activeChat.user.id, replyContent)
 
       if (!res.success) {
         alert("Insert Error: " + res.error)
+        // Rollback on failure could be implemented here
+        queryClient.invalidateQueries({ queryKey: ['messages', activeChat.user.id] })
         return
       }
 
-      setNewMessage("")
-      setReplyingTo(null)
+      // Real data will come through via Supabase Realtime subscription eventually
     } catch (error) {
       alert("Error sending message")
       console.error('Error sending message:', error)
@@ -343,15 +366,29 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps) {
                       animate={{ opacity: 1, y: 0 }}
                       key={msg.id}
                       id={`msg-${msg.id}`}
-                      className={`flex flex-col relative w-full ${isMe ? 'items-end' : 'items-start'}`}
-                      onTouchStart={handleTouchStart}
-                      onTouchEnd={handleTouchEnd}
-                      onTouchCancel={handleTouchEnd}
-                      onMouseDown={handleTouchStart}
-                      onMouseUp={handleTouchEnd}
-                      onMouseLeave={handleTouchEnd}
+                      className={`flex flex-col relative w-full ${isMe ? 'items-end' : 'items-start'} overflow-hidden py-0.5`}
                     >
-                      <div className="relative group max-w-[85%] sm:max-w-[75%]">
+                      <motion.div
+                        className="relative group max-w-[85%] sm:max-w-[75%]"
+                        drag="x"
+                        dragConstraints={{ left: 0, right: 0 }}
+                        dragElastic={0.2}
+                        onDragEnd={(e, info) => {
+                          // Allow swiping left (Arabic RTL standard) or right to reply
+                          if (Math.abs(info.offset.x) > 50) {
+                            setReplyingTo(msg)
+                            if (window.navigator && window.navigator.vibrate) {
+                              window.navigator.vibrate(50)
+                            }
+                          }
+                        }}
+                        onTouchStart={handleTouchStart}
+                        onTouchEnd={handleTouchEnd}
+                        onTouchCancel={handleTouchEnd}
+                        onMouseDown={handleTouchStart}
+                        onMouseUp={handleTouchEnd}
+                        onMouseLeave={handleTouchEnd}
+                      >
                         <div
                           className={`rounded-2xl px-4 py-2.5 shadow-sm text-sm relative break-words min-w-0 selectable-text ${
                             isMe ? "bg-primary text-primary-foreground rounded-tl-sm" : "bg-card border border-border text-foreground rounded-tr-sm"
@@ -405,7 +442,7 @@ export function ChatView({ onChatOpenStateChange }: ChatViewProps) {
                             </motion.div>
                           )}
                         </AnimatePresence>
-                      </div>
+                      </motion.div>
                     </motion.div>
                   )
                 })

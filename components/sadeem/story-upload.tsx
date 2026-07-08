@@ -182,11 +182,11 @@ export function StoryUpload({ onUploadComplete, userAvatar }: StoryUploadProps) 
              initial={{ opacity: 0 }}
              animate={{ opacity: 1 }}
              exit={{ opacity: 0 }}
-             className="fixed inset-0 z-[110] bg-black/90 flex flex-col items-center justify-center p-6"
+             className="fixed inset-0 h-[100dvh] z-[110] bg-black/90 flex flex-col items-center justify-center p-6"
            >
              <button
                onClick={() => setShowStoryUpload(false)}
-               className="absolute top-6 right-6 p-3 bg-white/10 rounded-full text-white hover:bg-white/20 transition"
+               className="absolute top-10 right-6 p-3 bg-white/10 rounded-full text-white hover:bg-white/20 transition"
              >
                <X className="size-6" />
              </button>
@@ -227,9 +227,9 @@ export function StoryUpload({ onUploadComplete, userAvatar }: StoryUploadProps) 
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed inset-0 z-[120] flex flex-col bg-black text-white"
+            className="fixed inset-0 h-[100dvh] z-[120] flex flex-col bg-black text-white"
           >
-            <div className="absolute top-0 inset-x-0 z-10 flex items-center justify-between p-4 bg-gradient-to-b from-black/60 to-transparent">
+            <div className="absolute top-0 pt-10 inset-x-0 z-10 flex items-center justify-between p-4 bg-gradient-to-b from-black/60 to-transparent">
               <button
                 onClick={handleCancel}
                 className="rounded-full bg-black/40 p-2 backdrop-blur hover:bg-black/60 transition"
@@ -257,7 +257,7 @@ export function StoryUpload({ onUploadComplete, userAvatar }: StoryUploadProps) 
               )}
             </div>
 
-            <div className="absolute bottom-0 inset-x-0 p-6 bg-gradient-to-t from-black/80 via-black/40 to-transparent">
+            <div className="absolute bottom-0 pb-10 inset-x-0 p-6 bg-gradient-to-t from-black/80 via-black/40 to-transparent">
               <button
                 onClick={handlePublish}
                 disabled={isUploading}

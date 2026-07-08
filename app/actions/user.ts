@@ -129,9 +129,15 @@ export async function updateUserProfile(data: { fullName?: string, username?: st
       }
     }
 
+    const updateData: any = { ...data };
+    // Maintain compatibility with coverImage field if present in UI mapping
+    if (data.coverUrl) {
+      updateData.coverImage = data.coverUrl;
+    }
+
     const updatedUser = await prisma.user.update({
       where: { id: session.user.id },
-      data
+      data: updateData
     });
 
     return { success: true, data: updatedUser };

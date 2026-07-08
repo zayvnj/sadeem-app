@@ -191,7 +191,7 @@ export function StoryViewer({ stories, initialStoryIndex = 0, onClose, onComplet
       initial={{ opacity: 0, y: 50 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 50 }}
-      className="fixed inset-0 z-[100] bg-black text-white flex flex-col"
+      className="fixed inset-0 h-[100dvh] z-[100] bg-black text-white flex flex-col"
     >
       {/* Dark gradient for Header visibility */}
       <div className="absolute top-0 inset-x-0 h-32 bg-gradient-to-b from-black/80 to-transparent pointer-events-none z-10" />
