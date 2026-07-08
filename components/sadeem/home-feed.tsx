@@ -422,12 +422,14 @@ export function HomeFeed() {
                   className="flex flex-col items-center gap-2 shrink-0 group w-[72px]"
                 >
                   <div className="relative">
-                    <div className={`flex size-[72px] items-center justify-center rounded-full bg-secondary transition-transform group-hover:scale-95 group-active:scale-90 border-2 overflow-hidden ${
-                      currentUserStoryGroup
-                        ? (hasMyUnseen ? "border-transparent bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-500 p-[3px]" : "border-border p-[3px]")
-                        : "border-border"
+                    <div className={`flex size-[72px] items-center justify-center rounded-full transition-transform group-hover:scale-95 group-active:scale-90 ${
+                      currentUserStoryGroup && myStoriesArr.length > 0
+                        ? (hasMyUnseen
+                            ? "bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-500 p-[3px]"
+                            : "bg-border p-[3px]")
+                        : "border-2 border-border bg-secondary"
                     }`}>
-                      <div className="size-full rounded-full bg-background overflow-hidden flex items-center justify-center">
+                      <div className="size-full rounded-full bg-background overflow-hidden flex items-center justify-center border-2 border-background">
                         {currentUserAvatar ? (
                           <img src={currentUserAvatar} alt="My Avatar" className="size-full object-cover" />
                         ) : (
