@@ -624,7 +624,7 @@ export function HomeFeed() {
                   ) : post.media_url.match(/\.(mp4|webm|ogg)$/i) ? (
                     <video src={post.media_url} className="size-full object-cover" controls preload="metadata" />
                   ) : (
-                    <img src={post.media_url} alt="Post media" className="size-full object-cover pointer-events-none" loading="lazy" />
+                    <BlurImage src={post.media_url} alt="Post media" className="size-full object-cover pointer-events-none" />
                   )}
                 </div>
               )}

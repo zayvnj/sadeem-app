@@ -147,7 +147,7 @@ export function ProfileView() {
   // Populate edit form when sheet opens
   useEffect(() => {
     if (isEditSheetOpen) {
-      setCoverPreview(profile?.coverImage || null)
+      setCoverPreview(profile?.coverImage || profile?.coverUrl || null)
       const defaultUsername = currentUser?.email?.split('@')[0] || "مستخدم_سديم"
       setEditFullName(profile?.fullName || profile?.full_name || "")
       setEditUsername(profile?.username || defaultUsername)
