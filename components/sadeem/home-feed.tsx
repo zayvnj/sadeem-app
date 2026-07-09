@@ -18,6 +18,7 @@ import { VerifiedBadge } from "./verified-badge"
 import { useInView } from "react-intersection-observer"
 import { toast } from "sonner"
 import { FullScreenImageViewer } from "./full-screen-image-viewer"
+import { FeedSkeleton, BlurImage } from "./skeletons"
 
 const container = {
   hidden: { opacity: 0 },
