@@ -308,7 +308,7 @@ export function ProfileView() {
     try {
       const res = await deleteUserAccount()
       if (res.success) {
-        await signOut(auth)
+        await supabase.auth.signOut()
         await Preferences.clear()
         localStorage.clear()
         toast.success("تم حذف الحساب بنجاح")
