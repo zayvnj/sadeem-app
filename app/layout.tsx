@@ -2,6 +2,10 @@ import type { Metadata } from 'next'
 import { Cairo } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
+import { QueryProvider } from '@/lib/query-provider'
+import { AuthProvider } from '@/lib/auth-context'
+import { Toaster } from '@/components/ui/sonner'
+import { ThemeProvider } from 'next-themes'
 
 const cairo = Cairo({ subsets: ['arabic', 'latin'], variable: '--font-cairo' })
 
@@ -34,9 +38,16 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="ar" dir="rtl" className={`bg-background ${cairo.variable}`}>
+    <html lang="ar" dir="rtl" className={`bg-background ${cairo.variable}`} suppressHydrationWarning>
       <body className="font-sans antialiased">
-        {children}
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <AuthProvider>
+            <QueryProvider>
+              {children}
+            </QueryProvider>
+          </AuthProvider>
+        </ThemeProvider>
+        <Toaster position="bottom-center" />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

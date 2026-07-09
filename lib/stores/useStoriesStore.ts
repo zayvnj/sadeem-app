@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { supabase } from '@/lib/supabase'
+import { getUserStories } from '@/app/actions/story_store'
 import { Capacitor } from '@capacitor/core'
 import { Preferences } from '@capacitor/preferences'
 
@@ -52,22 +52,16 @@ export const useStoriesStore = create<StoriesState>()(
       fetchStories: async (userId) => {
         set({ isLoading: true, error: null })
         try {
-          const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-          const { data, error } = await supabase
-            .from('stories')
-            .select('*, users:user_id(id, full_name, username, avatar_url, is_verified)')
-            .eq('user_id', userId)
-            .gt('created_at', oneDayAgo)
-            .order('created_at', { ascending: false })
+          const res = await getUserStories(userId)
 
-          if (error) throw error
+          if (!res.success) throw new Error(res.error)
 
-          // Merge fetched stories with existing ones (replace logic depending on exact needs, here we just update for the specific user)
+          // Merge fetched stories with existing ones
           const currentStories = get().stories.filter(s => s.user_id !== userId)
-          const newStories = data || []
+          const newStories = res.data || []
 
           set({
-            stories: [...newStories, ...currentStories],
+            stories: [...(newStories as any[]), ...currentStories],
             isLoading: false
           })
         } catch (e: any) {

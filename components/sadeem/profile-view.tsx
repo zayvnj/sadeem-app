@@ -1,11 +1,10 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { motion } from "framer-motion"
-import { Settings, Grid3x3, Film, Bookmark, Bell, Moon, Shield, LogOut, Loader2, User, Camera, Trash2, BadgeCheck, X, ChevronLeft, UserX } from "lucide-react"
-import { supabase } from "@/lib/supabase"
-import { auth } from "@/lib/firebase"
-import { signOut, deleteUser } from "firebase/auth"
+import { motion, useScroll, useTransform } from "framer-motion"
+import { Settings, Grid3x3, Film, Bookmark, Bell, Moon, Shield, LogOut, Loader2, User, Camera, Trash2, BadgeCheck, X, ChevronLeft, UserX, BarChart3, TrendingUp, Users, Eye } from "lucide-react"
+import { useSession } from "@/lib/auth-context"
+import { getUserProfile, updateUserProfile, getUserPosts, deleteUserAccount, getSavedPosts } from "@/app/actions/user"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Switch } from "@/components/ui/switch"
 import {
@@ -24,6 +23,10 @@ import { compressImage } from "@/lib/utils"
 import { Preferences } from "@capacitor/preferences"
 import { useTheme } from "next-themes"
 import { useStoryNavigation } from "./story/useStoryNavigation"
+import { ThemeToggle } from "./theme-toggle"
+import { supabase } from "@/lib/supabase"
+import { uploadMediaToSupabase } from "@/lib/supabase-storage"
+import { FullScreenImageViewer } from "./full-screen-image-viewer"
 
 const tabs = [
   { icon: Grid3x3, key: "grid" },
@@ -38,19 +41,20 @@ const container = {
 }
 const item = {
   hidden: { opacity: 0, scale: 0.9 },
-  show: { opacity: 1, scale: 1, transition: { type: "spring" as const, stiffness: 300, damping: 22 } },
+  show: { opacity: 1, scale: 1, transition: { type: "spring" as const, stiffness: 300, damping: 24 } },
 }
 
-const VIP_EMAILS = ['sly86055r@gmail.com', 'zainalabdeensalman123@gmail.com']
-
 export function ProfileView() {
+  const { theme, setTheme } = useTheme()
+  const [activeTab, setActiveTab] = useState("grid")
+  const [activeLightboxImage, setActiveLightboxImage] = useState<string | null>(null)
+  const [isEditSheetOpen, setIsEditSheetOpen] = useState(false)
+
   const [profile, setProfile] = useState<any>(null)
   const [posts, setPosts] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [isEditSheetOpen, setIsEditSheetOpen] = useState(false)
-  const currentUser = auth?.currentUser
+  const [savedPosts, setSavedPosts] = useState<any[]>([])
+  const [loadingSaved, setLoadingSaved] = useState(false)
 
-  // Edit form state
   const [editFullName, setEditFullName] = useState("")
   const [editUsername, setEditUsername] = useState("")
   const [editBio, setEditBio] = useState("")
@@ -59,61 +63,83 @@ export function ProfileView() {
   const [editAvatarRemoved, setEditAvatarRemoved] = useState(false)
   const [editLoading, setEditLoading] = useState(false)
   const [editError, setEditError] = useState("")
+  const [loading, setLoading] = useState(true)
 
-  // Settings view states
-  const [activeSettingsView, setActiveSettingsView] = useState<string>("main")
-  const { theme, setTheme } = useTheme()
+  const [coverPreview, setCoverPreview] = useState<string | null>(null)
+  const [isUploadingCover, setIsUploadingCover] = useState(false)
+  const coverInputRef = useRef<HTMLInputElement>(null)
+
+  const [stats, setStats] = useState([
+    { label: "منشور", value: 0 },
+    { label: "متابِع", value: 0 },
+    { label: "يتابع", value: 0 },
+  ])
+
   const { handleAvatarTap } = useStoryNavigation()
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const fetchProfileData = async (user: any) => {
-    if (!user) {
-      setLoading(false)
-      return
-    }
-    try {
-      const { data: profileData, error: profileError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', user.uid)
-        .single()
+  const containerRef = useRef<HTMLDivElement>(null)
+  const { scrollY } = useScroll({ container: containerRef })
+  const coverY = useTransform(scrollY, [0, 200], [0, 80])
 
-      if (profileError && profileError.code !== '42P01' && profileError.code !== 'PGRST116') {
-        console.error('Profile fetch error:', profileError)
-      }
-      setProfile(profileData || null)
-
-      const { data: postsData, error: postsError } = await supabase
-        .from('posts')
-        .select('*')
-        .eq('user_id', user.uid)
-        .order('created_at', { ascending: false })
-
-      if (postsError && postsError.code !== '42P01') console.error('Posts fetch error:', postsError)
-      setPosts(postsData || [])
-    } catch (error) {
-      console.error('Error fetching profile data:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const { data: session } = useSession()
+  const currentUser = session?.user
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((user: any) => {
-      fetchProfileData(user)
-    })
-    return () => unsubscribe()
-  }, [])
+    const fetchProfileData = async () => {
+      if (!currentUser?.id) {
+        setLoading(false)
+        return
+      }
+      try {
+        const profileRes = await getUserProfile(currentUser.id)
+        if (profileRes.success && profileRes.data) {
+          const profileData = profileRes.data
+          setProfile(profileData)
+          setStats(prev => prev.map(s => {
+            if(s.label === "متابع") return { ...s, value: profileData.followersCount || 0 }
+            if(s.label === "يتابع") return { ...s, value: profileData.followingCount || 0 }
+            return s
+          }))
+        }
+
+        const postsRes = await getUserPosts(currentUser.id)
+        if (postsRes.success && postsRes.data) {
+          setPosts(postsRes.data as any)
+          setStats(prev => prev.map(s => s.label === "منشور" ? { ...s, value: postsRes.data.length } : s))
+        }
+      } catch (error) {
+        console.error('Error fetching profile data:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchProfileData()
+  }, [currentUser])
+
+  useEffect(() => {
+    if (activeTab === "saved" && savedPosts.length === 0) {
+      setLoadingSaved(true)
+      getSavedPosts().then(res => {
+        if (res.success && res.data) {
+          setSavedPosts(res.data)
+        }
+        setLoadingSaved(false)
+      })
+    }
+  }, [activeTab])
 
   // Populate edit form when sheet opens
   useEffect(() => {
     if (isEditSheetOpen) {
+      setCoverPreview(profile?.coverImage || null)
       const defaultUsername = currentUser?.email?.split('@')[0] || "مستخدم_سديم"
-      setEditFullName(profile?.full_name || "")
+      setEditFullName(profile?.fullName || profile?.full_name || "")
       setEditUsername(profile?.username || defaultUsername)
       setEditBio(profile?.bio || "")
-      setEditAvatarPreview(profile?.avatar_url || null)
+      setEditAvatarPreview(profile?.avatarUrl || profile?.avatar_url || null)
       setEditAvatarFile(null)
       setEditAvatarRemoved(false)
       setEditError("")
@@ -137,13 +163,48 @@ export function ProfileView() {
     if (fileInputRef.current) fileInputRef.current.value = ""
   }
 
+  const handleCoverChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      try {
+        const compressed = await compressImage(file)
+        const previewUrl = URL.createObjectURL(compressed)
+        setCoverPreview(previewUrl)
+        setIsUploadingCover(true)
+
+        const coverUrl = await uploadMediaToSupabase(compressed)
+
+        // Ensure both fields might be updated depending on what the backend requires.
+        // Our schema has both coverImage and coverUrl. We'll pass coverUrl which is mapped in updateUserProfile.
+        const res = await updateUserProfile({ coverUrl })
+
+        if (res.success) {
+          setProfile((prev: any) => prev ? { ...prev, coverImage: coverUrl, coverUrl: coverUrl } : prev)
+          toast.success("تم تحديث صورة الغلاف بنجاح")
+          updateSession()
+        } else {
+          console.error("Cover upload backend error:", res.error)
+          toast.error(res.error || "فشل في تحديث صورة الغلاف")
+          setCoverPreview(profile?.coverImage || profile?.coverUrl || null)
+        }
+      } catch (error: any) {
+        console.error("Cover upload error:", error)
+        const errMsg = error instanceof Error ? error.message : typeof error === 'string' ? error : "فشل في رفع صورة الغلاف";
+        toast.error(errMsg)
+        setCoverPreview(profile?.coverImage || profile?.coverUrl || null)
+      } finally {
+        setIsUploadingCover(false)
+      }
+    }
+  }
+
   const handleSaveProfile = async () => {
     if (!currentUser) return
     setEditError("")
     setEditLoading(true)
 
     try {
-      const isVIP = currentUser.email ? VIP_EMAILS.includes(currentUser.email) : false
+      const isVIP = false // Simplified
 
       // Username validation
       const uname = editUsername.trim()
@@ -152,75 +213,57 @@ export function ProfileView() {
          setEditLoading(false)
          return
       }
-      if (isVIP && uname.length < 1) {
-         setEditError("اسم المستخدم لا يمكن أن يكون فارغاً")
-         setEditLoading(false)
-         return
-      }
 
-      // Check username uniqueness
-      if (!profile || uname !== profile.username) {
-         const { data: existingUser, error: checkError } = await supabase
-           .from('users')
-           .select('id')
-           .eq('username', uname)
-           .neq('id', currentUser.uid)
-           .maybeSingle()
-
-         if (existingUser) {
-           setEditError("اسم المستخدم هذا مأخوذ، يرجى اختيار اسم آخر")
-           setEditLoading(false)
-           return
-         }
-      }
-
-      let avatarUrl = profile?.avatar_url
+      let avatarUrl = profile?.avatarUrl || profile?.avatar_url
 
       if (editAvatarRemoved) {
         avatarUrl = null
       } else if (editAvatarFile) {
-        const fileExt = editAvatarFile.name.split('.').pop()
-        const fileName = `${currentUser.uid}-${Date.now()}.${fileExt}`
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('avatars')
-          .upload(fileName, editAvatarFile, { upsert: true })
+        try {
+          const fileExt = editAvatarFile.name.split('.').pop()
+          const fileName = `${currentUser.id}-${Date.now()}.${fileExt}`
+          const { data, error } = await supabase.storage
+            .from('avatars')
+            .upload(fileName, editAvatarFile, { upsert: true })
 
-        if (uploadError) {
+          if (error) {
+            console.error("Supabase avatar upload error:", error)
+            setEditError("حدث خطأ أثناء رفع الصورة الشخصية")
+            setEditLoading(false)
+            return
+          }
+
+          const { data: { publicUrl } } = supabase.storage
+            .from('avatars')
+            .getPublicUrl(fileName)
+
+          avatarUrl = publicUrl
+        } catch (uploadError) {
            console.error("Avatar upload error:", uploadError)
            setEditError("حدث خطأ أثناء رفع الصورة الشخصية")
            setEditLoading(false)
            return
         }
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('avatars')
-          .getPublicUrl(fileName)
-
-        avatarUrl = publicUrl
       }
 
-      const upsertData = {
-        id: currentUser.uid,
-        email: currentUser.email || "",
+      const updates = {
+        fullName: editFullName.trim(),
         username: uname,
-        full_name: editFullName.trim(),
         bio: editBio.trim(),
-        avatar_url: avatarUrl,
-        is_verified: isVIP ? true : (profile?.is_verified || false)
+        avatarUrl
       }
 
-      const { error: upsertError } = await supabase
-        .from('users')
-        .upsert(upsertData)
+      const res = await updateUserProfile(updates)
 
-      if (upsertError) {
-         console.error("Profile upsert error:", upsertError)
-         setEditError("حدث خطأ أثناء حفظ الملف الشخصي: " + upsertError.message)
-         setEditLoading(false)
-         return
+      if (!res.success) {
+        console.error("Profile update error:", res.error)
+        const errMsg = typeof res.error === 'string' ? res.error : JSON.stringify(res.error);
+        setEditError(errMsg || "حدث خطأ أثناء حفظ الملف الشخصي")
+        setEditLoading(false)
+        return
       }
 
-      await fetchProfileData(auth.currentUser)
+      setProfile({ ...profile, ...updates, full_name: updates.fullName, avatar_url: updates.avatarUrl })
       setIsEditSheetOpen(false)
       toast.success("تم حفظ الملف الشخصي بنجاح")
     } catch (e: any) {
@@ -232,55 +275,35 @@ export function ProfileView() {
   }
 
   const handleToggleSetting = async (key: string, value: boolean) => {
-    if (!currentUser) return
-
-    // Optimistic update locally
-    setProfile((prev: any) => ({ ...prev, [key]: value }))
-
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update({ [key]: value })
-        .eq('id', currentUser.uid)
-
-      if (error) throw error
-    } catch (err) {
-      console.error('Error updating setting:', err)
-      toast.error('فشل في حفظ الإعدادات')
-      // Revert optimistic update
-      setProfile((prev: any) => ({ ...prev, [key]: !value }))
-    }
+    // Left as placeholder for future local settings implementation
+    toast.success("تم تحديث الإعدادات")
   }
+
 
   const handleLogout = async () => {
     try {
-      await signOut(auth)
-      await Preferences.clear()
-      localStorage.clear()
-      toast.success("تم تسجيل الخروج")
-      // AppShell will automatically render AuthView when auth state changes to null
+      await supabase.auth.signOut()
+      // Auth context and AppShell will handle redirection to AuthView
     } catch (error) {
-      console.error('Error signing out:', error)
-      toast.error("حدث خطأ أثناء تسجيل الخروج")
+      console.error("Logout error:", error)
     }
   }
 
+
   const handleDeleteAccount = async () => {
     try {
-      if (!currentUser) return
-
-      // Delete user data from supabase
-      const { error } = await supabase.from('users').delete().eq('id', currentUser.uid)
-      if (error) throw error
-
-      // Delete auth account
-      await deleteUser(currentUser)
-      await Preferences.clear()
-      localStorage.clear()
-      toast.success("تم حذف الحساب بنجاح")
+      const res = await deleteUserAccount()
+      if (res.success) {
+        await signOut(auth)
+        await Preferences.clear()
+        localStorage.clear()
+        toast.success("تم حذف الحساب بنجاح")
+      } else {
+        toast.error("فشل في حذف الحساب.")
+      }
     } catch (err) {
       console.error('Error deleting account:', err)
-      toast.error("حدث خطأ أثناء محاولة حذف الحساب. قد تحتاج لتسجيل الدخول مجدداً لأسباب أمنية.")
+      toast.error("حدث خطأ أثناء محاولة حذف الحساب.")
     }
   }
 
@@ -293,120 +316,108 @@ export function ProfileView() {
   }
 
   const username = profile?.username || currentUser?.email?.split('@')[0] || "مستخدم_سديم"
-  const fullName = profile?.full_name || "مستخدم سديم"
+  const fullName = profile?.fullName || profile?.full_name || "مستخدم سديم"
   const bio = profile?.bio || "لا يوجد بايو حتى الآن"
 
-  const stats = [
-    { label: "منشور", value: posts.length.toString() },
-    { label: "متابِع", value: (profile?.followers_count || 0).toString() },
-    { label: "يتابع", value: (profile?.following_count || 0).toString() },
-  ]
-
   return (
-    <div className="pb-4">
-      <div className="flex items-center justify-between px-4 pt-4">
-        <h2 className="text-lg font-bold flex items-center gap-1">
-          @{username}
-          {profile?.is_verified && <BadgeCheck className="size-5 text-blue-500" />}
-        </h2>
+    <div ref={containerRef} className="flex h-full flex-col overflow-y-auto pb-20 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden bg-background relative" dir="rtl">
 
-        {/* Settings Dropdown/Sheet could go here, but for now just the icon */}
-        <Sheet onOpenChange={(open) => {
-          if (!open) setTimeout(() => setActiveSettingsView("main"), 300)
-        }}>
-          <SheetTrigger asChild>
-            <button aria-label="الإعدادات" className="text-foreground">
-              <Settings className="size-6" />
-            </button>
-          </SheetTrigger>
-          <SheetContent side="bottom" className="h-[85vh] rounded-t-3xl overflow-y-auto" dir="rtl">
-            {activeSettingsView === "main" && (
-              <>
-                <SheetHeader className="mb-4">
-                  <SheetTitle className="text-center">الإعدادات</SheetTitle>
-                </SheetHeader>
-                <div className="flex flex-col gap-2">
-                  <button onClick={() => setActiveSettingsView("notifications")} className="flex w-full items-center justify-between px-4 py-3 hover:bg-secondary rounded-xl transition-colors">
-                    <div className="flex items-center gap-3">
-                      <Bell className="size-5 text-muted-foreground" />
-                      <span className="text-sm font-medium">الإشعارات</span>
-                    </div>
-                    <ChevronLeft className="size-5 text-muted-foreground" />
-                  </button>
+      {/* Parallax Cover Image Area */}
+      <div className="absolute top-0 left-0 right-0 h-48 overflow-hidden z-0 pointer-events-none">
+        <motion.div style={{ y: coverY }} className="w-full h-full relative">
+          {coverPreview ? (
+            <>
+              <img src={coverPreview} alt="Cover" className="w-full h-full object-cover" />
+              <div className="absolute inset-0 bg-black/30" />
+            </>
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-indigo-900 via-purple-900 to-black opacity-80" />
+          )}
+        </motion.div>
+        {/* Dynamic Gradient Mask */}
+        <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-background to-transparent" />
+      </div>
 
-                  <div className="flex w-full items-center justify-between px-4 py-3 hover:bg-secondary rounded-xl transition-colors">
-                    <div className="flex items-center gap-3">
-                      <Moon className="size-5 text-muted-foreground" />
-                      <span className="text-sm font-medium">المظهر الداكن</span>
-                    </div>
-                    <Switch
-                      dir="ltr"
-                      checked={theme === "dark"}
-                      onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
-                    />
+
+
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 sticky top-0 z-10">
+        <span className="font-bold text-lg flex items-center gap-1 drop-shadow-md">
+          {username}
+          {profile?.isVerified && <BadgeCheck className="size-4 text-blue-500" />}
+        </span>
+
+        <div className="flex items-center gap-2">
+          <ThemeToggle className="drop-shadow-md bg-background/20 backdrop-blur-sm" />
+          <Sheet>
+            <SheetTrigger asChild>
+              <button className="p-2 -mr-2 rounded-full hover:bg-secondary/50 transition-colors drop-shadow-md bg-background/20 backdrop-blur-sm">
+                <Settings className="size-6 text-foreground" />
+              </button>
+            </SheetTrigger>
+            <SheetContent side="bottom" className="h-[80vh] sm:h-[90vh] rounded-t-3xl border-t border-border overflow-y-auto" dir="rtl">
+            <SheetHeader className="mb-6">
+              <SheetTitle className="text-center font-bold">الإعدادات</SheetTitle>
+            </SheetHeader>
+
+            <div className="space-y-6 pb-6">
+              <div className="space-y-4">
+                <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider px-2">الحساب</h3>
+
+                <button onClick={() => setIsEditSheetOpen(true)} className="flex w-full items-center justify-between px-2 py-3 hover:bg-secondary rounded-xl transition-colors">
+                  <div className="flex items-center gap-3">
+                    <User className="size-5 text-foreground" />
+                    <span className="text-sm font-medium">تعديل الملف الشخصي</span>
                   </div>
+                  <ChevronLeft className="size-5 text-muted-foreground opacity-50" />
+                </button>
 
-                  <button onClick={() => setActiveSettingsView("privacy")} className="flex w-full items-center justify-between px-4 py-3 hover:bg-secondary rounded-xl transition-colors">
-                    <div className="flex items-center gap-3">
-                      <Shield className="size-5 text-muted-foreground" />
-                      <span className="text-sm font-medium">الخصوصية والأمان</span>
-                    </div>
-                    <ChevronLeft className="size-5 text-muted-foreground" />
-                  </button>
-
-                  <div className="h-px bg-border my-2" />
-
-                  <button onClick={handleLogout} className="flex w-full items-center gap-3 px-4 py-3 text-red-500 hover:bg-red-500/10 rounded-xl transition-colors">
+                <button onClick={handleLogout} className="flex w-full items-center justify-between px-2 py-3 hover:bg-secondary rounded-xl transition-colors">
+                  <div className="flex items-center gap-3 text-red-500">
                     <LogOut className="size-5" />
                     <span className="text-sm font-medium">تسجيل الخروج</span>
-                  </button>
-                </div>
-              </>
-            )}
+                  </div>
+                  <ChevronLeft className="size-5 text-red-500 opacity-50" />
+                </button>
+              </div>
 
-            {activeSettingsView === "notifications" && (
-              <motion.div initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="flex flex-col gap-4">
-                <SheetHeader className="mb-4 flex flex-row items-center justify-between">
-                  <button onClick={() => setActiveSettingsView("main")} className="p-2"><ChevronLeft className="size-5 rotate-180" /></button>
-                  <SheetTitle className="m-0">الإشعارات</SheetTitle>
-                  <div className="w-9" />
-                </SheetHeader>
-                <div className="space-y-4 px-2">
-                  <div className="flex items-center justify-between">
-                     <span className="text-sm font-medium">الإشعارات العامة</span>
-                     <Switch dir="ltr" checked={profile?.notify_general ?? true} onCheckedChange={(val) => handleToggleSetting('notify_general', val)} />
-                  </div>
-                  <div className="flex items-center justify-between">
-                     <span className="text-sm font-medium">الإعجابات</span>
-                     <Switch dir="ltr" checked={profile?.notify_likes ?? true} onCheckedChange={(val) => handleToggleSetting('notify_likes', val)} />
-                  </div>
-                  <div className="flex items-center justify-between">
-                     <span className="text-sm font-medium">التعليقات</span>
-                     <Switch dir="ltr" checked={profile?.notify_comments ?? true} onCheckedChange={(val) => handleToggleSetting('notify_comments', val)} />
-                  </div>
-                  <div className="flex items-center justify-between">
-                     <span className="text-sm font-medium">المتابعون الجدد</span>
-                     <Switch dir="ltr" checked={profile?.notify_follows ?? true} onCheckedChange={(val) => handleToggleSetting('notify_follows', val)} />
-                  </div>
-                </div>
-              </motion.div>
-            )}
+              <div className="h-px bg-border" />
 
-            {activeSettingsView === "privacy" && (
-              <motion.div initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="flex flex-col gap-4">
-                <SheetHeader className="mb-4 flex flex-row items-center justify-between">
-                  <button onClick={() => setActiveSettingsView("main")} className="p-2"><ChevronLeft className="size-5 rotate-180" /></button>
-                  <SheetTitle className="m-0">الخصوصية</SheetTitle>
-                  <div className="w-9" />
-                </SheetHeader>
-                <div className="space-y-4 px-2">
-                  <div className="flex items-center justify-between">
-                     <span className="text-sm font-medium">حساب خاص</span>
-                     <Switch dir="ltr" checked={profile?.is_private ?? false} onCheckedChange={(val) => handleToggleSetting('is_private', val)} />
+              <div className="space-y-4">
+                <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider px-2">تفضيلات التطبيق</h3>
+
+                <div className="flex items-center justify-between px-2 py-3">
+                  <div className="flex items-center gap-3">
+                    <Moon className="size-5 text-foreground" />
+                    <span className="text-sm font-medium">الوضع الليلي</span>
                   </div>
-                  <div className="flex items-center justify-between">
-                     <span className="text-sm font-medium">السماح بالتعليقات</span>
-                     <Switch dir="ltr" checked={profile?.allow_comments ?? true} onCheckedChange={(val) => handleToggleSetting('allow_comments', val)} />
+                  <Switch
+                    dir="ltr"
+                    checked={theme === 'dark'}
+                    onCheckedChange={(checked) => setTheme(checked ? 'dark' : 'light')}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between px-2 py-3">
+                  <div className="flex items-center gap-3">
+                    <Bell className="size-5 text-foreground" />
+                    <span className="text-sm font-medium">الإشعارات</span>
+                  </div>
+                  <Switch dir="ltr" checked={profile?.notifications_enabled ?? true} onCheckedChange={(val) => handleToggleSetting('notifications_enabled', val)} />
+                </div>
+              </div>
+
+              <div className="h-px bg-border" />
+
+              <div className="space-y-4">
+                  <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider px-2">الخصوصية والأمان</h3>
+
+                  <div className="flex items-center justify-between px-2 py-3 hover:bg-secondary rounded-xl transition-colors cursor-pointer">
+                    <div className="flex items-center gap-3">
+                      <Shield className="size-5 text-foreground" />
+                      <span className="text-sm font-medium">الأمان</span>
+                    </div>
+                    <ChevronLeft className="size-5 text-muted-foreground opacity-50" />
                   </div>
 
                   <div className="h-px bg-border my-6" />
@@ -432,24 +443,24 @@ export function ProfileView() {
                     </AlertDialogContent>
                   </AlertDialog>
                 </div>
-              </motion.div>
-            )}
+            </div>
           </SheetContent>
         </Sheet>
+        </div>
       </div>
 
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center gap-5 px-4 py-5"
+        className="flex items-center gap-5 px-4 py-5 relative z-10 mt-16"
       >
         <div
           className="rounded-full p-[3px] ring-2 ring-foreground shrink-0 cursor-pointer transition-transform active:scale-95"
-          onClick={() => currentUser && handleAvatarTap(currentUser.uid)}
+          onClick={() => currentUser && handleAvatarTap(currentUser.id!)}
         >
           <div className="flex size-20 items-center justify-center rounded-full bg-muted text-2xl font-bold text-muted-foreground overflow-hidden">
-            {profile?.avatar_url ? (
-              <img src={profile.avatar_url} alt="Avatar" className="size-full object-cover pointer-events-none" />
+            {profile?.avatarUrl || profile?.avatar_url ? (
+              <img src={profile.avatarUrl || profile.avatar_url} alt="Avatar" className="size-full object-cover pointer-events-none" />
             ) : (
               <User className="size-10 pointer-events-none" />
             )}
@@ -472,10 +483,39 @@ export function ProfileView() {
         </p>
       </div>
 
+      {profile?.isProfessional && (
+        <div className="px-4 py-2 mt-2">
+          <div className="bg-secondary/60 rounded-2xl backdrop-blur-xl border border-white/10 shadow-[0_0_15px_rgba(124,58,237,0.1)] p-3 cursor-pointer hover:bg-secondary transition-colors">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-sm font-bold flex items-center gap-2">
+                <BarChart3 className="size-4 text-blue-500" />
+                لوحة التحكم الاحترافية
+              </span>
+              <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                {profile.professionalCategory || "منشئ محتوى"}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
+              تم الوصول إلى 4.2 ألف حساب في آخر 30 يوماً. اضغط لعرض المزيد من الرؤى والأدوات.
+            </p>
+            <div className="flex gap-4">
+               <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                  <TrendingUp className="size-3.5 text-green-500" />
+                  +12% تفاعل
+               </div>
+               <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                  <Users className="size-3.5 text-blue-500" />
+                  +45 متابع
+               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex gap-2 px-4 py-4">
         <Sheet open={isEditSheetOpen} onOpenChange={setIsEditSheetOpen}>
           <SheetTrigger asChild>
-            <button className="flex-1 rounded-lg bg-foreground py-2 text-sm font-semibold text-background hover:opacity-90 active:scale-95 transition-all">
+            <button className="flex-1 rounded-lg bg-secondary py-2 text-sm font-semibold text-foreground hover:bg-secondary/80 active:scale-95 transition-all border border-border/50">
               تعديل الملف
             </button>
           </SheetTrigger>
@@ -483,8 +523,27 @@ export function ProfileView() {
             <SheetHeader className="mb-4">
               <SheetTitle className="text-center">تعديل الملف الشخصي</SheetTitle>
             </SheetHeader>
+            <div className="w-full flex justify-end px-4 mb-4">
+              <button
+                onClick={() => coverInputRef.current?.click()}
+                disabled={isUploadingCover}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-secondary hover:bg-secondary/80 transition-colors text-sm font-semibold border border-border/50"
+              >
+                {isUploadingCover ? <Loader2 className="size-4 animate-spin" /> : <Camera className="size-4" />}
+                تغيير الغلاف
+              </button>
+            </div>
 
-            <div className="flex flex-col items-center gap-4 mb-6">
+
+
+              <input
+                type="file"
+                ref={coverInputRef}
+                className="hidden"
+                accept="image/*"
+                onChange={handleCoverChange}
+              />
+<div className="flex flex-col items-center gap-4 mb-6">
               <div className="relative group">
                 <div className="flex size-24 items-center justify-center rounded-full bg-muted border-2 border-border overflow-hidden">
                   {editAvatarPreview ? (
@@ -569,7 +628,7 @@ export function ProfileView() {
         </Sheet>
 
         <button
-          className="flex-1 rounded-lg border border-border py-2 text-sm font-semibold hover:bg-secondary active:scale-95 transition-all"
+          className="flex-1 rounded-lg bg-secondary py-2 text-sm font-semibold text-foreground hover:bg-secondary/80 active:scale-95 transition-all border border-border/50"
           onClick={() => {
              navigator.clipboard.writeText(window.location.href)
                .then(() => toast.success("تم نسخ رابط الملف الشخصي!"))
@@ -582,10 +641,11 @@ export function ProfileView() {
 
       {/* Tabs */}
       <div className="flex border-y border-border">
-        {tabs.map((t, i) => (
+        {tabs.map((t) => (
           <button
             key={t.key}
-            className={`flex flex-1 justify-center py-3 ${i === 0 ? "border-b-2 border-foreground" : "text-muted-foreground"}`}
+            onClick={() => setActiveTab(t.key)}
+            className={`flex flex-1 justify-center py-3 transition-colors ${activeTab === t.key ? "border-b-2 border-foreground text-foreground" : "text-muted-foreground hover:text-foreground/80"}`}
           >
             <t.icon className="size-5" />
           </button>
@@ -593,31 +653,91 @@ export function ProfileView() {
       </div>
 
       {/* Grid */}
-      <motion.div variants={container} initial="hidden" animate="show" className="grid grid-cols-3 gap-0.5 p-0.5 min-h-[300px]">
-        {posts.length > 0 ? (
-          posts.map((post) => (
-            <motion.div
-              key={post.id}
-              variants={item}
-              className="aspect-square bg-gradient-to-br from-muted to-secondary border border-border overflow-hidden"
-            >
-              {post.media_url && (
-                post.media_url.match(/\.(mp4|webm|ogg)$/i) ? (
-                  <video src={post.media_url} className="size-full object-cover" />
-                ) : (
-                  <img src={post.media_url} alt="Post" className="size-full object-cover" />
-                )
-              )}
-            </motion.div>
-          ))
-        ) : (
-          <div className="col-span-3 flex items-center justify-center text-sm text-muted-foreground py-10">
-            لا توجد منشورات حتى الآن
+      <motion.div variants={container} initial="hidden" animate="show" className="grid grid-cols-3 gap-1.5 p-1.5 min-h-[300px]">
+        {activeTab === "grid" && (
+          posts.length > 0 ? (
+            posts.map((post) => (
+              <motion.div
+                key={post.id}
+                variants={item}
+                className="aspect-[4/5] rounded-2xl group relative cursor-pointer hover:scale-[0.98] transition-all duration-300 bg-gradient-to-br from-muted to-secondary border border-border/50 overflow-hidden shadow-sm hover:shadow-xl hover:border-foreground/20"
+                onClick={() => {
+                  if (post.media_url && !post.media_url.match(/\.(mp4|webm|ogg)$/i)) {
+                    setActiveLightboxImage(post.media_url)
+                  }
+                }}
+              >
+                {post.media_url && (
+                  post.media_url.match(/\.(mp4|webm|ogg)$/i) ? (
+                    <video src={post.media_url} className="size-full object-cover" />
+                  ) : (
+                    <img src={post.media_url} alt="Post" className="size-full object-cover" />
+                  )
+                )}
+              </motion.div>
+            ))
+          ) : (
+            <div className="col-span-3 flex flex-col items-center justify-center text-sm text-muted-foreground py-16 gap-4 px-8 text-center">
+              <div className="size-20 rounded-full border-2 border-foreground flex items-center justify-center mb-2">
+                 <Camera className="size-10 text-foreground" />
+              </div>
+              <h3 className="text-xl font-bold text-foreground">لا توجد منشورات</h3>
+              <p className="text-muted-foreground/80 leading-relaxed text-sm">
+                 عندما تشارك صوراً ومقاطع فيديو، ستظهر على ملفك الشخصي هنا.
+              </p>
+              <button className="text-blue-500 font-bold mt-2 hover:text-blue-600 transition-colors">
+                مشاركة أول منشور
+              </button>
+            </div>
+          )
+        )}
+
+        {activeTab === "saved" && (
+          loadingSaved ? (
+            <div className="col-span-3 flex items-center justify-center py-10">
+              <Loader2 className="size-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : savedPosts.length > 0 ? (
+            savedPosts.map((post) => (
+              <motion.div
+                key={post.id}
+                variants={item}
+                className="aspect-[4/5] rounded-2xl group relative cursor-pointer hover:scale-[0.98] transition-all duration-300 bg-gradient-to-br from-muted to-secondary border border-border/50 overflow-hidden shadow-sm hover:shadow-xl hover:border-foreground/20"
+              >
+                {post.media_url && (
+                  post.media_url.match(/\.(mp4|webm|ogg)$/i) ? (
+                    <video src={post.media_url} className="size-full object-cover" />
+                  ) : (
+                    <img src={post.media_url} alt="Post" className="size-full object-cover" />
+                  )
+                )}
+              </motion.div>
+            ))
+          ) : (
+            <div className="col-span-3 flex flex-col items-center justify-center text-sm text-muted-foreground py-10 gap-2">
+              <Bookmark className="size-8 opacity-20" />
+              لا توجد محفوظات حتى الآن
+            </div>
+          )
+        )}
+
+        {activeTab === "reels" && (
+          <div className="col-span-3 flex flex-col items-center justify-center text-sm text-muted-foreground py-16 gap-4 px-8 text-center">
+            <div className="size-20 rounded-full border-2 border-foreground flex items-center justify-center mb-2">
+               <Film className="size-10 text-foreground" />
+            </div>
+            <h3 className="text-xl font-bold text-foreground">مقاطع ريلز</h3>
+            <p className="text-muted-foreground/80 leading-relaxed text-sm">
+               شارك لحظاتك الممتعة عبر مقاطع فيديو قصيرة.
+            </p>
           </div>
         )}
       </motion.div>
 
-      {/* Note: The inline settings list was moved to a sheet attached to the Settings icon on top for a cleaner look */}
+      <FullScreenImageViewer
+        imageUrl={activeLightboxImage}
+        onClose={() => setActiveLightboxImage(null)}
+      />
     </div>
   )
 }

@@ -3,7 +3,11 @@ import { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
   appId: 'com.sadeem.app',
   appName: 'Sadeem',
-  webDir: 'out',
+  webDir: 'public',
+  server: {
+    url: 'https://zainsa.vercel.app',
+    cleartext: true
+  },
   plugins: {
     FirebaseAuthentication: {
       skipNativeAuth: false,

@@ -2,14 +2,15 @@
 
 import { useState, useRef, useEffect } from "react"
 import { Plus, Loader2, X } from "lucide-react"
-import { supabase } from "@/lib/supabase"
-import { auth } from "@/lib/firebase"
+import { useSession } from "@/lib/auth-context"
+import { createStory } from "@/app/actions/story"
 import { bwToast } from "./ui/bw-toast"
 import { motion, AnimatePresence } from "framer-motion"
 import { useStoriesStore } from "@/lib/stores/useStoriesStore"
 import { useNavigation } from "./navigation-context"
 import { CustomStoryGallery } from "./custom-story-gallery"
 import { Capacitor } from "@capacitor/core"
+import { uploadMediaToSupabase } from "@/lib/supabase-storage"
 
 interface StoryUploadProps {
   onUploadComplete: () => void
@@ -61,47 +62,38 @@ export function StoryUpload({ onUploadComplete, userAvatar }: StoryUploadProps) 
 
           canvas.toBlob(
             (blob) => {
-              if (blob) {
-                resolve(blob)
-              } else {
-                reject(new Error("Canvas to Blob failed"))
-              }
+              if (blob) resolve(blob)
+              else reject(new Error("Canvas to Blob failed"))
             },
             "image/jpeg",
             0.8
           )
         }
       }
-      reader.onerror = (error) => reject(error)
     })
   }
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+  const handleFileSelect = (file: File) => {
     if (!file) return
+    const isVideo = file.type.startsWith('video/')
+    const maxVideoSize = 20 * 1024 * 1024 // 20MB limit for video
 
-    if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
-      bwToast.error("يرجى اختيار صورة أو فيديو للقصة")
+    if (isVideo && file.size > maxVideoSize) {
+      bwToast.error("حجم الفيديو يجب أن يكون أقل من 20 ميجابايت")
       return
     }
 
     setSelectedFile(file)
-    setSelectedFileType(file.type.startsWith("video/") ? "video" : "image")
-    const url = URL.createObjectURL(file)
-    setPreviewUrl(url)
-    setShowGallery(false)
+    setSelectedFileType(isVideo ? 'video' : 'image')
+    setPreviewUrl(URL.createObjectURL(file))
   }
 
-  const handleGallerySelect = (file: File, type: "image" | "video") => {
-    setSelectedFile(file)
-    setSelectedFileType(type)
-    const url = URL.createObjectURL(file)
-    setPreviewUrl(url)
-    setShowGallery(false)
+  const handleWebFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) handleFileSelect(file)
   }
 
-  const handleAddClick = () => {
-    if (isUploading) return
+  const triggerSelect = async () => {
     if (Capacitor.isNativePlatform()) {
       setShowGallery(true)
     } else {
@@ -109,11 +101,13 @@ export function StoryUpload({ onUploadComplete, userAvatar }: StoryUploadProps) 
     }
   }
 
+  const { data: session } = useSession()
+  const currentUser = session?.user
+
   const handlePublish = async () => {
     if (!selectedFile) return
 
-    const user = auth?.currentUser
-    if (!user) {
+    if (!currentUser) {
       bwToast.error("يجب تسجيل الدخول لرفع قصة")
       return
     }
@@ -123,49 +117,30 @@ export function StoryUpload({ onUploadComplete, userAvatar }: StoryUploadProps) 
 
     try {
       let uploadFile = selectedFile
-      let filePath = `${user.uid}/stories/${Date.now()}`
 
       if (selectedFileType === 'image') {
-        // 1. Compress Image
         const compressedBlob = await compressImage(selectedFile)
         uploadFile = new File([compressedBlob], `story_${Date.now()}.jpg`, { type: 'image/jpeg' })
-        filePath += '.jpg'
-      } else {
-        filePath += '.mp4'
       }
 
-      // 2. Upload to Storage (media bucket)
-      const { error: uploadError } = await supabase.storage
-        .from('media')
-        .upload(filePath, uploadFile)
+      // 1. Upload via Supabase Storage
+      const publicUrl = await uploadMediaToSupabase(uploadFile)
 
-      if (uploadError) throw uploadError
+      // 2. Insert into stories table via Server Action
+      const res = await createStory(publicUrl)
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('media')
-        .getPublicUrl(filePath)
+      if (!res.success || !res.data) {
+        throw new Error(res.error || "فشل في حفظ القصة")
+      }
 
-      // 3. Insert into stories table
-      const { data: insertedData, error: dbError } = await supabase
-        .from('stories')
-        .insert({
-          user_id: user.uid,
-          media_url: publicUrl,
-        })
-        .select('*, users:user_id(id, full_name, username, avatar_url, is_verified)')
-        .single()
-
-      if (dbError) throw dbError
-
-      // Fetch user profile to ensure `users` relation is populated if the single select failed to populate it.
-      let newStory = insertedData;
-      if (!newStory.users) {
-         const { data: userData } = await supabase.from('users').select('id, full_name, username, avatar_url, is_verified').eq('id', user.uid).single()
-         newStory.users = userData;
+      const newStory = {
+        ...res.data,
+        users: currentUser,
+        user_id: currentUser.id
       }
 
       // Add to store
-      addStory(newStory)
+      addStory(newStory as any)
 
       bwToast.dismiss(toastId)
       bwToast.success("تم رفع القصة بنجاح")
@@ -176,7 +151,7 @@ export function StoryUpload({ onUploadComplete, userAvatar }: StoryUploadProps) 
 
       // Auto open viewer directly without arbitrary timeouts
       setStoryViewerData({
-        stories: [newStory],
+        stories: [newStory as any],
         initialIndex: 0
       })
     } catch (error: any) {
@@ -201,137 +176,117 @@ export function StoryUpload({ onUploadComplete, userAvatar }: StoryUploadProps) 
 
   return (
     <>
-    <AnimatePresence>
-      {previewUrl && (
-        <motion.div
-          initial={{ opacity: 0, y: 50 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 50 }}
-          className="fixed inset-0 z-[200] bg-black text-white flex flex-col"
-        >
-          {/* Header */}
-          <div className="absolute top-0 left-0 right-0 p-4 pt-16 z-10 flex items-center justify-end bg-gradient-to-b from-black/60 to-transparent">
-            <button onClick={handleCancel} className="p-2 rounded-full bg-black/40 backdrop-blur">
-              <X className="size-6" />
-            </button>
-          </div>
+      <AnimatePresence>
+        {showStoryUpload && !previewUrl && (
+           <motion.div
+             initial={{ opacity: 0 }}
+             animate={{ opacity: 1 }}
+             exit={{ opacity: 0 }}
+             className="fixed inset-0 h-[100dvh] z-[110] bg-black/90 flex flex-col items-center justify-center p-6"
+           >
+             <button
+               onClick={() => setShowStoryUpload(false)}
+               className="absolute top-10 right-6 p-3 bg-white/10 rounded-full text-white hover:bg-white/20 transition"
+             >
+               <X className="size-6" />
+             </button>
 
-          {/* Media Preview */}
-          <div className="flex-1 relative flex items-center justify-center bg-zinc-900">
-            {selectedFileType === 'video' ? (
-              <video
-                src={previewUrl}
-                className="w-full h-full object-cover"
-                autoPlay
-                loop
-                muted
-                playsInline
-              />
-            ) : (
-              <img
-                src={previewUrl}
-                alt="Story Preview"
-                className="w-full h-full object-cover"
-              />
-            )}
-          </div>
+             <motion.div
+               initial={{ scale: 0.9, y: 20 }}
+               animate={{ scale: 1, y: 0 }}
+               className="bg-zinc-900 rounded-3xl p-8 max-w-sm w-full flex flex-col items-center text-center border border-zinc-800"
+             >
+               <div className="size-20 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500 mb-6 flex items-center justify-center shadow-lg">
+                 <Plus className="size-10 text-white" />
+               </div>
+               <h2 className="text-xl font-bold text-white mb-2">إضافة قصة جديدة</h2>
+               <p className="text-zinc-400 text-sm mb-8">شارك لحظاتك اليومية مع أصدقائك. تختفي القصة بعد 24 ساعة.</p>
 
-          {/* Footer - "Your Story" Button */}
-          <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/80 to-transparent z-10 flex justify-end">
-            <button
-              onClick={handlePublish}
-              disabled={isUploading}
-              className="flex items-center gap-3 bg-white/20 hover:bg-white/30 transition-colors backdrop-blur px-5 py-3 rounded-full text-white"
-            >
-              <div className="size-8 rounded-full bg-muted flex items-center justify-center overflow-hidden border border-white/50">
-                {isUploading ? (
-                   <Loader2 className="size-4 animate-spin text-white" />
-                ) : userAvatar ? (
-                  <img src={userAvatar} alt="Your Avatar" className="size-full object-cover" />
-                ) : (
-                  <span className="text-xs font-bold text-black">م</span>
-                )}
-              </div>
-              <span className="font-semibold">{isUploading ? 'جاري النشر...' : 'قصتك'}</span>
-            </button>
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-
-    <div className="flex flex-col items-center gap-1.5 shrink-0 relative">
-      <div
-        className="relative cursor-pointer"
-        onClick={handleAddClick}
-      >
-        <div className="rounded-full p-[2px] ring-2 ring-border">
-          <div className="size-16 rounded-full bg-muted flex items-center justify-center overflow-hidden">
-            {isUploading ? (
-              <Loader2 className="size-6 animate-spin text-muted-foreground" />
-            ) : userAvatar ? (
-              <img src={userAvatar} alt="Your Avatar" className="size-full object-cover" />
-            ) : (
-              <div className="size-full bg-secondary flex items-center justify-center font-bold text-muted-foreground text-xl">
-                م
-              </div>
-            )}
-          </div>
-        </div>
-
-        {!isUploading && (
-          <div className="absolute bottom-0 right-0 rounded-full bg-primary p-1 border-2 border-background shadow-sm">
-            <Plus className="size-3 text-primary-foreground" />
-          </div>
+               <input
+                  type="file"
+                  accept="image/*,video/*"
+                  className="hidden"
+                  ref={fileInputRef}
+                  onChange={handleWebFileSelect}
+               />
+               <button
+                 onClick={triggerSelect}
+                 className="w-full py-4 rounded-2xl bg-white text-black font-bold text-base hover:bg-zinc-200 transition-colors"
+               >
+                 اختيار من المعرض
+               </button>
+             </motion.div>
+           </motion.div>
         )}
-      </div>
-      <span className="text-xs text-muted-foreground">قصتك</span>
+      </AnimatePresence>
 
-      <input
-        type="file"
-        ref={fileInputRef}
-        accept="image/*"
-        onChange={handleFileChange}
-        className="hidden"
-      />
-    </div>
+      <AnimatePresence>
+        {previewUrl && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: "100%" }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="fixed inset-0 h-[100dvh] z-[120] flex flex-col bg-black text-white"
+          >
+            <div className="absolute top-0 pt-10 inset-x-0 z-10 flex items-center justify-between p-4 bg-gradient-to-b from-black/60 to-transparent">
+              <button
+                onClick={handleCancel}
+                className="rounded-full bg-black/40 p-2 backdrop-blur hover:bg-black/60 transition"
+              >
+                <X className="size-6" />
+              </button>
+            </div>
 
-    {/* Conditionally rendered fullscreen upload/editor triggered by context */}
-    <AnimatePresence>
-      {showStoryUpload && !previewUrl && (
-        <motion.div
-          initial={{ opacity: 0, y: 50 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 50 }}
-          className="fixed inset-0 z-[200] bg-black text-white flex flex-col items-center justify-center"
-        >
-          <div className="absolute top-0 left-0 right-0 p-4 pt-16 z-10 flex items-center justify-end bg-gradient-to-b from-black/60 to-transparent">
-            <button onClick={() => setShowStoryUpload(false)} className="p-2 rounded-full bg-black/40 backdrop-blur">
-              <X className="size-6" />
-            </button>
-          </div>
-          <div className="flex flex-col items-center justify-center gap-4 text-center">
-            <h2 className="text-xl font-bold">إنشاء قصة</h2>
-            <p className="text-muted-foreground">اختر صورة أو فيديو لقصتك</p>
-            <button
-              onClick={handleAddClick}
-              className="mt-4 bg-primary text-primary-foreground px-6 py-3 rounded-full font-bold flex items-center gap-2 hover:opacity-90"
-            >
-              <Plus className="size-5" />
-              اختيار من المعرض
-            </button>
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+            <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-zinc-900">
+              {selectedFileType === 'video' ? (
+                <video
+                  src={previewUrl}
+                  className="w-full h-full object-contain"
+                  controls
+                  autoPlay
+                  loop
+                  playsInline
+                />
+              ) : (
+                <img
+                  src={previewUrl}
+                  alt="Preview"
+                  className="w-full h-full object-contain"
+                />
+              )}
+            </div>
 
-    <AnimatePresence>
+            <div className="absolute bottom-0 pb-10 inset-x-0 p-6 bg-gradient-to-t from-black/80 via-black/40 to-transparent">
+              <button
+                onClick={handlePublish}
+                disabled={isUploading}
+                className="w-full flex items-center justify-center gap-2 rounded-2xl bg-white px-6 py-4 font-bold text-black disabled:opacity-50 transition-transform active:scale-95 text-lg"
+              >
+                {isUploading ? (
+                  <>
+                    <Loader2 className="size-5 animate-spin" />
+                    جاري النشر...
+                  </>
+                ) : (
+                  "نشر القصة"
+                )}
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Native Custom Gallery Overlay */}
       {showGallery && (
         <CustomStoryGallery
           onClose={() => setShowGallery(false)}
-          onSelect={handleGallerySelect}
+          onSelect={(file) => {
+            setShowGallery(false)
+            handleFileSelect(file)
+          }}
         />
       )}
-    </AnimatePresence>
     </>
   )
 }

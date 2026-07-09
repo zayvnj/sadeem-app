@@ -1,14 +1,23 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Loader2, BadgeCheck } from "lucide-react"
-import { supabase } from "@/lib/supabase"
-import { auth } from "@/lib/firebase"
+import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Loader2, BadgeCheck, Play, Sparkles } from "lucide-react"
+import { useSession } from "@/lib/auth-context"
+import { getFeedPosts, getExploreFeed, getReels, toggleLike } from "@/app/actions/post"
+import { getStories } from "@/app/actions/story"
 import { useNavigation } from "./navigation-context"
 import { StoryViewer } from "./story-viewer"
 import { StoryUpload } from "./story-upload"
 import { useStoryNavigation } from "./story/useStoryNavigation"
+import { LikesSheet } from "./likes-sheet"
+import { CommentsSheet } from "./comments-sheet"
+import { PostOptionsSheet } from "./post-options-sheet"
+import { useInfiniteQuery, useQuery, useQueryClient, useMutation } from "@tanstack/react-query"
+import { VerifiedBadge } from "./verified-badge"
+import { useInView } from "react-intersection-observer"
+import { toast } from "sonner"
+import { FullScreenImageViewer } from "./full-screen-image-viewer"
 
 const container = {
   hidden: { opacity: 0 },
@@ -24,393 +33,614 @@ const item = {
 }
 
 export function HomeFeed() {
-  const [posts, setPosts] = useState<any[]>([])
-  const [stories, setStories] = useState<any[]>([])
   const [viewedStoryIds, setViewedStoryIds] = useState<Set<string>>(new Set())
-  const [loading, setLoading] = useState(true)
-  const { setSelectedUserId, storyViewerData, setStoryViewerData } = useNavigation()
+  const { setSelectedUserId, storyViewerData, setStoryViewerData, setShowStoryUpload, setShowMediaStudio } = useNavigation()
+
+  const { data: session } = useSession()
+  const currentUser = session?.user
 
   const { handleAvatarTap } = useStoryNavigation()
   const [currentUserAvatar, setCurrentUserAvatar] = useState<string | null>(null)
 
-  const fetchFeedData = async () => {
-    try {
-      const user = auth?.currentUser
+  useEffect(() => {
+    if (currentUser?.image) {
+      setCurrentUserAvatar(currentUser.image as string)
+    }
+  }, [currentUser])
 
-      let followedIds: string[] = []
+  // 1. Fetch Stories
+  const { data: stories = [], refetch: refetchStories } = useQuery({
+    queryKey: ['feed', 'stories'],
+    enabled: !!currentUser,
+    queryFn: async () => {
+      const res = await getStories()
+      return res.success ? res.data : []
+    },
+    staleTime: 60000,
+    networkMode: 'offlineFirst',
+  })
 
-      if (user) {
-        // Fetch current user avatar
-        const { data: userData } = await supabase
-          .from('users')
-          .select('avatar_url')
-          .eq('id', user.uid)
-          .single()
+  // 2. Fetch Reels (Horizontal top bar)
+  const { data: reels = [] } = useQuery({
+    queryKey: ['feed', 'reels'],
+    enabled: !!currentUser,
+    queryFn: async () => {
+      const res = await getReels()
+      return res.success ? res.data : []
+    },
+    staleTime: 60000,
+    networkMode: 'offlineFirst',
+  })
 
-        if (userData?.avatar_url) {
-          setCurrentUserAvatar(userData.avatar_url)
-        }
+  // 3. Fetch Posts (Infinite Scroll DB Pagination)
+  const fetchPostsPage = async ({ pageParam }: { pageParam?: string }) => {
+    // If we are already paginating the fallback explore feed, just fetch explore feed
+    const isFetchingExplore = pageParam?.startsWith('explore_');
+    const actualCursor = isFetchingExplore ? pageParam.replace('explore_', '') : pageParam;
 
-        // Fetch users the current user follows
-        const { data: followsData } = await supabase
-          .from('follows')
-          .select('following_id')
-          .eq('follower_id', user.uid)
+    let res = isFetchingExplore ? await getExploreFeed(actualCursor) : await getFeedPosts(actualCursor)
+    let allPosts = res.success && Array.isArray(res.data) ? res.data : []
+    let nextCursor = res.success ? (res as any).nextCursor : null
 
-        if (followsData) {
-          followedIds = followsData.map(f => f.following_id)
-        }
-        // Include self
-        followedIds.push(user.uid)
+    // If the feed is empty (on first page), fallback to explore feed
+    if (allPosts.length === 0 && !pageParam) {
+      res = await getExploreFeed(actualCursor)
+      allPosts = res.success && Array.isArray(res.data) ? res.data : []
+      nextCursor = res.success ? (res as any).nextCursor : null
+      // Note: we can add a flag to indicate these are suggested posts
+      allPosts = allPosts.map(post => ({ ...post, isSuggested: true }))
+    } else if (isFetchingExplore) {
+      allPosts = allPosts.map(post => ({ ...post, isSuggested: true }))
+    }
 
-        // Fetch viewed stories
-        const { data: viewedData } = await supabase
-          .from('story_views')
-          .select('story_id')
-          .eq('user_id', user.uid)
+    // Wrap cursor to indicate it belongs to the explore feed if we are in fallback mode
+    if (nextCursor && (isFetchingExplore || (allPosts.length > 0 && allPosts[0].isSuggested))) {
+        nextCursor = `explore_${nextCursor}`
+    }
 
-        if (viewedData) {
-          setViewedStoryIds(new Set(viewedData.map(v => v.story_id)))
-        }
-      }
+    // Map to expected structure for UI compatibility
+    const formattedPosts = allPosts.map(post => ({
+      ...post,
+      user_id: post.userId,
+      media_url: post.mediaUrl,
+      text: post.caption,
+      users: {
+        ...post.user,
+        avatar_url: post.user?.avatarUrl,
+        full_name: post.user?.fullName
+      },
+      likes_count: post.likesCount,
+      comments_count: post.commentsCount,
+      isLiked: post.isLiked
+    }))
 
-      // Fetch posts
-      let postsQuery = supabase
-        .from('posts')
-        .select('*, users:user_id(id, full_name, username, avatar_url, is_verified), post_likes(user_id)')
-        .order('created_at', { ascending: false })
-        .limit(20)
-
-      // If user is logged in, only show their posts and posts of people they follow
-      if (user && followedIds.length > 0) {
-        postsQuery = postsQuery.in('user_id', followedIds)
-      }
-
-      const { data: postsData, error: postsError } = await postsQuery
-
-      if (postsError && postsError.code !== '42P01') console.error('Posts fetch error:', postsError)
-
-      const formattedPosts = (postsData || []).map((post: any) => {
-        const likesCount = post.post_likes ? post.post_likes.length : 0
-        const isLiked = user ? post.post_likes?.some((like: any) => like.user_id === user.uid) : false
-
-        return {
-          ...post,
-          likes_count: likesCount,
-          isLiked
-        }
-      })
-
-      // Filter out expired stories (e.g. 24 hours old)
-      const oneDayAgo = new Date()
-      oneDayAgo.setDate(oneDayAgo.getDate() - 1)
-
-      let storiesQuery = supabase
-        .from('stories')
-        .select('*, users:user_id(id, full_name, username, avatar_url, is_verified)')
-        .gt('created_at', oneDayAgo.toISOString())
-        .order('created_at', { ascending: true }) // Grouping will handle recent ordering
-
-      if (user && followedIds.length > 0) {
-        storiesQuery = storiesQuery.in('user_id', followedIds)
-      }
-
-      const { data: storiesData, error: storiesError } = await storiesQuery
-
-      if (storiesError && storiesError.code !== '42P01') console.error('Stories fetch error:', storiesError)
-
-      // Group stories by user
-      const groupedStories: Record<string, any[]> = {}
-      ;(storiesData || []).forEach(story => {
-        if (!groupedStories[story.user_id]) {
-          groupedStories[story.user_id] = []
-        }
-        groupedStories[story.user_id].push(story)
-      })
-
-      // Sort users by their most recent story
-      const userStoryGroups = Object.values(groupedStories).sort((a, b) => {
-        const lastStoryA = a[a.length - 1]
-        const lastStoryB = b[b.length - 1]
-        return new Date(lastStoryB.created_at).getTime() - new Date(lastStoryA.created_at).getTime()
-      })
-
-      setPosts(formattedPosts)
-      setStories(userStoryGroups)
-    } catch (error) {
-      console.error('Error fetching feed:', error)
-    } finally {
-      setLoading(false)
+    return {
+      data: formattedPosts,
+      nextCursor: nextCursor
     }
   }
 
+  const {
+    data: postsData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    status: postsStatus
+  } = useInfiniteQuery({
+    queryKey: ['feed', 'posts'],
+    queryFn: fetchPostsPage,
+    enabled: !!currentUser,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    initialPageParam: undefined as string | undefined,
+    staleTime: 60000,
+    networkMode: 'offlineFirst',
+  })
+
+  const { ref: loadMoreRef, inView } = useInView()
+
   useEffect(() => {
-    fetchFeedData()
-  }, [])
+    if (inView && hasNextPage) {
+      fetchNextPage()
+    }
+  }, [inView, hasNextPage, fetchNextPage])
 
-  const handleLike = async (postId: string, isDoubleTap = false) => {
-    try {
-      const user = auth?.currentUser
-      if (!user) {
-        alert("يجب تسجيل الدخول للإعجاب")
-        return
-      }
+  const posts = postsData?.pages.flatMap(page => page.data) || []
+  const loading = !currentUser || postsStatus === 'pending'
 
-      const postIndex = posts.findIndex(p => p.id === postId)
-      if (postIndex === -1) return
+  const queryClient = useQueryClient()
 
-      const post = posts[postIndex]
-      const wasLiked = post.isLiked
-
-      // Prevent unliking on double-tap
-      if (isDoubleTap && wasLiked) return
-
-      const isNowLiked = !wasLiked
-
-      // Optimistic UI Update
-      setPosts(current =>
-        current.map(p => {
-          if (p.id === postId) {
-            return {
-              ...p,
-              isLiked: isNowLiked,
-              likes_count: isNowLiked ? (p.likes_count || 0) + 1 : Math.max(0, (p.likes_count || 1) - 1)
-            }
-          }
-          return p
-        })
-      )
-
+  // --- Like Mutation with Optimistic Updates ---
+  const toggleLikeMutation = useMutation({
+    mutationFn: async ({ postId, isNowLiked, user }: { postId: string; isNowLiked: boolean; user: any }) => {
       if (isNowLiked) {
-        // Only celebrate on new like
         window.dispatchEvent(new CustomEvent('mascot-action', { detail: 'celebrate' }))
-
-        const { error } = await supabase.from('post_likes').insert({ post_id: postId, user_id: user.uid })
-        if (error) throw error
-      } else {
-        const { error } = await supabase.from('post_likes')
-          .delete()
-          .eq('post_id', postId)
-          .eq('user_id', user.uid)
-        if (error) throw error
       }
+      const res = await toggleLike(postId)
+      if (!res.success) throw new Error(res.error)
+    },
+    onMutate: async ({ postId, isNowLiked }) => {
+      await queryClient.cancelQueries({ queryKey: ['feed', 'posts'] })
+      const previousPosts = queryClient.getQueryData(['feed', 'posts'])
 
+      queryClient.setQueryData(['feed', 'posts'], (old: any) => {
+        if (!old || !old.pages) return old
+        return {
+          ...old,
+          pages: old.pages.map((page: any) => ({
+            ...page,
+            data: page.data.map((post: any) => {
+              if (post.id === postId) {
+                return {
+                  ...post,
+                  isLiked: isNowLiked,
+                  likes_count: isNowLiked ? (post.likes_count || 0) + 1 : Math.max(0, (post.likes_count || 1) - 1)
+                }
+              }
+              return post
+            })
+          }))
+        }
+      })
+      return { previousPosts }
+    },
+    onError: (err, variables, context: any) => {
+      if (context?.previousPosts) {
+        queryClient.setQueryData(['feed', 'posts'], context.previousPosts)
+      }
+      console.error('Error toggling like:', err)
+    },
+    onSettled: () => {
+      // Background re-fetch to ensure sync without disrupting UI
+      queryClient.invalidateQueries({ queryKey: ['feed', 'posts'] })
+    }
+  })
+
+  const handleLike = (postId: string, isDoubleTap = false) => {
+    if (!currentUser) {
+      alert("يجب تسجيل الدخول للإعجاب")
+      return
+    }
+
+    const post = posts.find(p => p.id === postId)
+    if (!post) return
+
+    const wasLiked = post.isLiked
+    if (isDoubleTap && wasLiked) return
+
+    toggleLikeMutation.mutate({ postId, isNowLiked: !wasLiked, user: currentUser })
+  }
+
+  // --- Save Mutation with Optimistic Updates ---
+  const toggleSaveMutation = useMutation({
+    mutationFn: async ({ postId, isNowSaved, user }: { postId: string; isNowSaved: boolean; user: any }) => {
+      const { toggleSave } = await import("@/app/actions/post")
+      const res = await toggleSave(postId)
+      if (!res.success) throw new Error(res.error)
+    },
+    onMutate: async ({ postId, isNowSaved }) => {
+      await queryClient.cancelQueries({ queryKey: ['feed', 'posts'] })
+      const previousPosts = queryClient.getQueryData(['feed', 'posts'])
+
+      queryClient.setQueryData(['feed', 'posts'], (old: any) => {
+        if (!old || !old.pages) return old
+        return {
+          ...old,
+          pages: old.pages.map((page: any) => ({
+            ...page,
+            data: page.data.map((post: any) => {
+              if (post.id === postId) {
+                return { ...post, isSaved: isNowSaved }
+              }
+              return post
+            })
+          }))
+        }
+      })
+      return { previousPosts }
+    },
+    onError: (err, variables, context: any) => {
+      if (context?.previousPosts) {
+        queryClient.setQueryData(['feed', 'posts'], context.previousPosts)
+      }
+      console.error('Error toggling save:', err)
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['feed', 'posts'] })
+    }
+  })
+
+  const handleSave = (e: React.MouseEvent, postId: string) => {
+    e.stopPropagation()
+    if (!currentUser) {
+      toast.error("يجب تسجيل الدخول للحفظ")
+      return
+    }
+    const post = posts.find(p => p.id === postId)
+    if (!post) return
+
+    try {
+      toggleSaveMutation.mutate({ postId, isNowSaved: !post.isSaved, user: currentUser })
+      if (!post.isSaved) {
+        toast.success("تم الحفظ بنجاح")
+      }
     } catch (error) {
-      console.error('Error toggling like:', error)
-      fetchFeedData() // Revert on failure by refetching actual state
+      console.error("Save error:", error)
+      toast.error("حدث خطأ أثناء الحفظ")
     }
   }
 
   // Exploding Heart Animation state
   const [explodingPostId, setExplodingPostId] = useState<string | null>(null)
 
-  const handleDoubleTap = (postId: string) => {
-    handleLike(postId, true)
+  // Likes Sheet State
+  const [activeLikesPostId, setActiveLikesPostId] = useState<string | null>(null)
+  const likesPressTimer = useRef<NodeJS.Timeout | null>(null)
 
-    // Trigger animation
-    setExplodingPostId(postId)
-    setTimeout(() => {
-      setExplodingPostId(null)
-    }, 800)
+  const handleLikePointerDown = (postId: string) => {
+    likesPressTimer.current = setTimeout(() => {
+      setActiveLikesPostId(postId)
+      likesPressTimer.current = null
+    }, 500) // 500ms for long press
+  }
+
+  const handleLikePointerUp = (postId: string) => {
+    if (likesPressTimer.current) {
+      clearTimeout(likesPressTimer.current)
+      likesPressTimer.current = null
+      handleLike(postId)
+    }
+  }
+
+  // Comments Sheet State
+  const [activeCommentsPostId, setActiveCommentsPostId] = useState<string | null>(null)
+  const [activeCommentsPostOwnerId, setActiveCommentsPostOwnerId] = useState<string | null>(null)
+
+  // Options Sheet State
+  const [activeOptionsPost, setActiveOptionsPost] = useState<any | null>(null)
+
+  // Lightbox State
+  const [activeLightboxImage, setActiveLightboxImage] = useState<string | null>(null)
+
+  // Debounce click handler state
+  const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  const handleImageTap = (postId: string, mediaUrl: string) => {
+    if (clickTimeoutRef.current) {
+      // Double tap detected
+      clearTimeout(clickTimeoutRef.current)
+      clickTimeoutRef.current = null
+
+      handleLike(postId, true)
+      setExplodingPostId(postId)
+      setTimeout(() => {
+        setExplodingPostId(null)
+      }, 800)
+    } else {
+      // First tap detected, wait to see if it's a double tap
+      clickTimeoutRef.current = setTimeout(() => {
+        clickTimeoutRef.current = null
+        // Single tap action
+        setActiveLightboxImage(mediaUrl)
+      }, 300) // 300ms delay for double tap detection
+    }
+  }
+
+  // Pull to refresh
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [dragY, setDragY] = useState(0)
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['feed', 'posts'] }),
+      queryClient.invalidateQueries({ queryKey: ['feed', 'stories'] }),
+      queryClient.invalidateQueries({ queryKey: ['feed', 'reels'] })
+    ])
+    setIsRefreshing(false)
+    setDragY(0)
   }
 
   return (
-    <div className="pb-4">
-      {/* Story Viewer Overlay */}
-      <AnimatePresence>
-        {storyViewerData && (
-          <StoryViewer
-            stories={storyViewerData.stories}
-            initialStoryIndex={storyViewerData.initialIndex}
-            onClose={() => {
-              setStoryViewerData(null)
-              fetchFeedData() // Refresh to update seen states
-            }}
-            onComplete={() => {
-              // Find the index of the current user's stories in the main stories array
-              const currentUserStoriesIndex = stories.findIndex(
-                (userGroup) => userGroup[0].user_id === storyViewerData.stories[0].user_id
-              )
+    <div className="pb-4 h-full relative overflow-hidden flex flex-col">
+      <StoryUpload
+        onUploadComplete={() => {
+          queryClient.invalidateQueries({ queryKey: ['feed', 'stories'] })
+        }}
+        userAvatar={currentUserAvatar}
+      />
+      <FullScreenImageViewer
+        imageUrl={activeLightboxImage}
+        onClose={() => setActiveLightboxImage(null)}
+      />
 
-              if (currentUserStoriesIndex >= 0 && currentUserStoriesIndex < stories.length - 1) {
-                // Auto-advance to the next user's stories
-                const nextUserStories = stories[currentUserStoriesIndex + 1]
-                const firstUnseenIndex = nextUserStories.findIndex((s: any) => !viewedStoryIds.has(s.id))
-
-                setStoryViewerData({
-                  stories: nextUserStories,
-                  initialIndex: firstUnseenIndex >= 0 ? firstUnseenIndex : 0
-                })
-              } else {
-                // We reached the end of all stories, close viewer
-                setStoryViewerData(null)
-                fetchFeedData()
-              }
-            }}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Stories */}
+      {/* Pull to refresh indicator - Moved z-index logic so it doesn't block interactions when idle */}
       <motion.div
-        variants={container}
-        initial="hidden"
-        animate="show"
-        className="flex gap-4 overflow-x-auto px-4 py-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className={`absolute top-0 left-0 right-0 flex justify-center pointer-events-none ${
+          isRefreshing || dragY > 0 ? 'z-50 opacity-100' : '-z-10 opacity-0'
+        }`}
+        animate={{ y: isRefreshing ? 20 : (dragY > 0 ? Math.max(0, dragY - 40) : -40) }}
+        initial={{ y: -40 }}
+        transition={{ type: "spring", stiffness: 300, damping: 30 }}
       >
-        <StoryUpload
-          onUploadComplete={fetchFeedData}
-          userAvatar={currentUserAvatar}
-        />
-
-        {stories.map((userStories) => {
-          const firstStory = userStories[0]
-          const name = firstStory.users?.username || firstStory.users?.full_name || 'مستخدم'
-
-          // Check if all stories from this user are seen
-          const allSeen = userStories.every((s: any) => viewedStoryIds.has(s.id))
-
-          return (
-            <motion.div
-              key={firstStory.user_id}
-              variants={item}
-              className="flex flex-col items-center gap-1.5 shrink-0 cursor-pointer"
-              onClick={() => handleAvatarTap(firstStory.user_id)}
-            >
-              <div className={`rounded-full p-[3px] ${allSeen ? 'bg-muted' : 'bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-500'}`}>
-                <div className="size-16 rounded-full bg-muted flex items-center justify-center overflow-hidden text-lg font-semibold text-muted-foreground border-2 border-background">
-                  {firstStory.users?.avatar_url ? (
-                    <img src={firstStory.users.avatar_url} alt="Story" className="size-full object-cover" />
-                  ) : (
-                    name.charAt(0)
-                  )}
-                </div>
-              </div>
-              <span className="text-xs text-muted-foreground max-w-16 truncate">{name}</span>
-            </motion.div>
-          )
-        })}
+        <div className="bg-background shadow-md rounded-full p-2 mt-4">
+          <Loader2 className={`size-6 text-primary ${isRefreshing ? 'animate-spin' : ''}`} style={{ transform: `rotate(${dragY * 2}deg)` }} />
+        </div>
       </motion.div>
 
-      <div className="h-px bg-border" />
+      {/* Main Feed Content */}
+      <motion.div
+        className="flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        drag="y"
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={0.2}
+        onDrag={(e, info) => {
+          // Only allow dragging down when at the top of the scroll container
+          const target = e.target as HTMLElement;
+          const scrollContainer = target.closest('.overflow-y-auto');
 
-      {/* Posts */}
+          if (scrollContainer && scrollContainer.scrollTop === 0 && info.offset.y > 0) {
+             setDragY(info.offset.y)
+          } else {
+             setDragY(0)
+          }
+        }}
+        onDragEnd={(e, info) => {
+          if (dragY > 100 && !isRefreshing) {
+            handleRefresh()
+          } else {
+            setDragY(0)
+          }
+        }}
+        animate={{ y: isRefreshing ? 60 : 0 }}
+        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+      >
+
+      {/* Stories horizontal scroll */}
+      <div className="mb-8 mt-6 w-full overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex gap-4">
+          {(() => {
+            // Find if current user has active stories in the fetched array
+            const currentUserStoriesIndex = stories.findIndex((group: any) => group.id === currentUser?.id)
+            const currentUserStoryGroup: any = currentUserStoriesIndex >= 0 ? stories[currentUserStoriesIndex] : null
+
+            // Note: fallback to userGroup.stories or userGroup array since both formats might be used
+            const myStoriesArr = currentUserStoryGroup?.stories || (Array.isArray(currentUserStoryGroup) ? currentUserStoryGroup : [])
+
+            const hasMyUnseen = currentUserStoryGroup ? (
+              currentUserStoryGroup.hasUnseen !== undefined
+                ? currentUserStoryGroup.hasUnseen && !myStoriesArr.every((s:any) => viewedStoryIds.has(s.id))
+                : myStoriesArr.some((s: any) => !viewedStoryIds.has(s.id))
+            ) : false
+
+            // Filter out current user from the rest of the list so it doesn't duplicate
+            const otherStories = stories.filter((group: any) => group.id !== currentUser?.id && group[0]?.user_id !== currentUser?.id)
+
+            return (
+              <>
+                <button
+                  onClick={() => handleAvatarTap(currentUser?.id || '')}
+                  className="flex flex-col items-center gap-2 shrink-0 group w-[72px]"
+                >
+                  <div className="relative">
+                    <div className={`flex size-[72px] items-center justify-center rounded-full transition-transform group-hover:scale-95 group-active:scale-90 ${
+                      currentUserStoryGroup && myStoriesArr.length > 0
+                        ? (hasMyUnseen
+                            ? "bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-500 p-[3px]"
+                            : "bg-border p-[3px]")
+                        : "border-2 border-border bg-secondary"
+                    }`}>
+                      <div className="size-full rounded-full bg-background overflow-hidden flex items-center justify-center border-2 border-background">
+                        {currentUserAvatar ? (
+                          <img src={currentUserAvatar} alt="My Avatar" className="size-full object-cover" />
+                        ) : (
+                          <Heart className="size-8 text-muted-foreground" />
+                        )}
+                      </div>
+                    </div>
+                    {!currentUserStoryGroup && (
+                      <div
+                        className="absolute -bottom-1 -right-1 flex size-6 items-center justify-center rounded-full bg-foreground text-background shadow-sm border-2 border-background cursor-pointer z-20 pointer-events-auto"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowStoryUpload(true);
+                        }}
+                      >
+                        <span className="text-lg leading-none mt-[-2px]">+</span>
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-xs font-bold text-foreground">أنت</span>
+                </button>
+
+                {otherStories.map((userGroup: any, i: number) => {
+            const firstStory = userGroup.stories?.[0] || userGroup[0] // handle potential nested structure
+            if (!firstStory) return null;
+
+            const user = userGroup.user || firstStory.users
+
+            // Check both local seen state and backend state
+            const hasUnseen = userGroup.hasUnseen !== undefined
+              ? userGroup.hasUnseen && !userGroup.stories.every((s:any) => viewedStoryIds.has(s.id))
+              : userGroup.some((s: any) => !viewedStoryIds.has(s.id))
+
+            return (
+              <button
+                key={i}
+                onClick={() => handleAvatarTap(userGroup.id || firstStory.user_id)}
+                className="flex flex-col items-center gap-2 shrink-0 group w-[72px]"
+              >
+                <div
+                  className={`rounded-full p-[3px] transition-transform group-hover:scale-95 group-active:scale-90 ${
+                    hasUnseen ? "bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-500" : "bg-border"
+                  }`}
+                >
+                  <div className="flex size-16 items-center justify-center rounded-full bg-background overflow-hidden border-2 border-background">
+                    {user?.avatar_url ? (
+                      <img src={user.avatar_url} alt="" className="size-full object-cover" />
+                    ) : (
+                      <div className="size-full bg-secondary flex items-center justify-center font-bold text-foreground text-xl">
+                        {(user?.full_name || user?.username || "م").charAt(0)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <span className="text-xs font-bold text-foreground truncate w-full px-1">
+                  {user?.full_name?.split(' ')[0] || user?.username}
+                </span>
+              </button>
+            )
+          })}
+          </>
+        )
+      })()}
+        </div>
+      </div>
+
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-12">
+        <div className="flex justify-center py-20">
           <Loader2 className="size-8 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <motion.div variants={container} initial="hidden" animate="show" className="flex flex-col">
-          {posts.length > 0 ? posts.map((post) => (
-            <motion.article key={post.id} variants={item} className="border-b border-border px-4 py-4">
-              <div className="flex items-center gap-3">
-                <div
-                  className="cursor-pointer"
-                  onClick={() => post.user_id && setSelectedUserId(post.user_id)}
+        <motion.div variants={container} initial="hidden" animate="show" className="flex flex-col gap-6">
+
+          {/* Inline Reels Bar (if available) */}
+          {reels.length > 0 && (
+             <div className="mb-2">
+               <div className="px-4 mb-3 flex items-center justify-between">
+                 <h2 className="font-bold text-lg flex items-center gap-2">
+                   <Play className="size-5 text-primary fill-primary" /> ريلز
+                 </h2>
+                 <button className="text-sm text-primary font-semibold hover:underline">عرض الكل</button>
+               </div>
+               <div className="w-full overflow-x-auto px-4 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                 <div className="flex gap-3">
+                   {reels.map((reel: any) => (
+                     <div key={reel.id} className="relative w-[140px] h-[220px] rounded-2xl overflow-hidden shrink-0 bg-secondary group cursor-pointer shadow-sm border border-border/50">
+                        {reel.media_url && (
+                          <video src={reel.media_url} className="size-full object-cover" />
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
+                        <div className="absolute bottom-2 left-2 right-2 text-white flex flex-col gap-1">
+                          <span className="text-xs font-bold truncate">@{reel.users?.username}</span>
+                          <span className="text-[10px] flex items-center gap-1 opacity-90">
+                            <Play className="size-3" /> {reel.likes_count || 0}
+                          </span>
+                        </div>
+                     </div>
+                   ))}
+                 </div>
+               </div>
+             </div>
+          )}
+
+          {posts.length > 0 && posts[0]?.isSuggested && (
+            <div className="px-4 pb-2 mb-2">
+              <div className="bg-secondary/50 rounded-xl p-4 flex flex-col items-center text-center gap-2 border border-border">
+                <Sparkles className="size-8 text-primary" />
+                <h3 className="font-bold text-foreground">مرحباً بك في سديم!</h3>
+                <p className="text-sm text-muted-foreground">أنت لا تتابع أحداً بعد. إليك بعض المنشورات المقترحة لك، قم بمتابعة بعض الأشخاص لملء يومياتك.</p>
+              </div>
+            </div>
+          )}
+          {posts.length > 0 ? posts.map((post: any) => {
+            const user = post.users
+
+            return (
+            <motion.article key={post.id} variants={item} className="flex flex-col gap-4 mb-4">
+              <div className="flex items-center justify-between px-4">
+                <button
+                  className="flex items-center gap-3 group text-right"
+                  onClick={() => setSelectedUserId(post.user_id)}
                 >
-                  {post.users?.avatar_url ? (
-                    <img src={post.users.avatar_url} alt="" className="size-10 rounded-full object-cover" />
-                  ) : (
-                    <div className="size-10 rounded-full bg-muted flex items-center justify-center font-semibold text-muted-foreground overflow-hidden">
-                      {(post.users?.full_name || post.users?.username || 'م').charAt(0)}
-                    </div>
-                  )}
-                </div>
-                <div
-                  className="flex-1 cursor-pointer"
-                  onClick={() => post.user_id && setSelectedUserId(post.user_id)}
+                  <div className="size-11 rounded-full bg-secondary overflow-hidden border border-border group-active:scale-95 transition-transform flex items-center justify-center font-bold text-foreground">
+                    {user?.avatar_url ? (
+                      <img src={user.avatar_url} alt="" className="size-full object-cover" />
+                    ) : (
+                      (user?.full_name || user?.username || "م").charAt(0)
+                    )}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="font-bold text-[15px] leading-none group-hover:underline flex items-center gap-1">
+                      {user?.full_name || user?.username}
+                      {user?.isVerified && <VerifiedBadge />}
+                    </span>
+                    <span className="text-xs text-muted-foreground mt-1 font-medium">@{user?.username}</span>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setActiveOptionsPost(post)}
+                  className="p-2 -mr-2 rounded-full hover:bg-secondary transition-colors"
                 >
-                  <p className="text-sm font-semibold leading-tight flex items-center gap-1">
-                    {post.users?.full_name || post.users?.username || 'مستخدم سديم'}
-                    {post.users?.is_verified && <BadgeCheck className="size-4 text-blue-500" />}
-                  </p>
-                  <p className="text-xs text-muted-foreground">@{post.users?.username || post.user_id?.substring(0,6)} · الآن</p>
-                </div>
-                <button className="text-muted-foreground" aria-label="خيارات">
-                  <MoreHorizontal className="size-5" />
+                  <MoreHorizontal className="size-5 text-muted-foreground" />
                 </button>
               </div>
 
-              {post.text && <p className="mt-3 text-sm leading-relaxed text-pretty selectable-text">{post.text}</p>}
+              {post.text && (
+                <p className="px-4 text-[15px] leading-relaxed text-foreground whitespace-pre-wrap selectable-text">
+                  {post.text}
+                </p>
+              )}
 
-              {post.media_url ? (
-                <motion.div
-                  whileHover={{ opacity: 0.95 }}
-                  onDoubleClick={() => handleDoubleTap(post.id)}
-                  className="mt-3 aspect-[4/3] w-full rounded-xl border border-border overflow-hidden bg-muted relative select-none cursor-pointer"
+              {post.media_url && (
+                <div
+                  className="relative aspect-square w-full sm:rounded-3xl overflow-hidden bg-secondary border-y sm:border border-border cursor-pointer select-none"
+                  onClick={() => handleImageTap(post.id, post.media_url)}
                 >
-                  {post.media_url.match(/\.(mp4|webm|ogg)$/i) ? (
-                     <video src={post.media_url} controls className="size-full object-cover pointer-events-none" />
-                  ) : (
-                     <img src={post.media_url} alt="Post media" className="size-full object-cover pointer-events-none" />
-                  )}
-
-                  {/* Heart Explosion */}
                   <AnimatePresence>
                     {explodingPostId === post.id && (
                       <motion.div
-                        initial={{ opacity: 0, scale: 0.5 }}
-                        animate={{ opacity: 1, scale: 1.2 }}
-                        exit={{ opacity: 0, scale: 1.5 }}
-                        transition={{ duration: 0.5, type: 'spring', damping: 15 }}
-                        className="absolute inset-0 flex items-center justify-center pointer-events-none z-10"
+                        initial={{ opacity: 0, scale: 0.5, rotate: -15 }}
+                        animate={{ opacity: 1, scale: 1.5, rotate: 0 }}
+                        exit={{ opacity: 0, scale: 2, filter: 'blur(10px)' }}
+                        transition={{ duration: 0.5, type: 'spring', damping: 12 }}
+                        className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none"
                       >
-                        <Heart className="size-24 fill-white text-white drop-shadow-2xl" />
+                        <Heart className="size-32 text-white drop-shadow-2xl fill-white" />
                       </motion.div>
                     )}
                   </AnimatePresence>
-                </motion.div>
-              ) : (
-                 <motion.div
-                    whileHover={{ opacity: 0.95 }}
-                    onDoubleClick={() => handleDoubleTap(post.id)}
-                    className="mt-3 aspect-[4/3] w-full rounded-xl bg-gradient-to-br from-muted to-secondary border border-border relative select-none cursor-pointer"
-                 >
-                   {/* Heart Explosion */}
-                   <AnimatePresence>
-                     {explodingPostId === post.id && (
-                       <motion.div
-                         initial={{ opacity: 0, scale: 0.5 }}
-                         animate={{ opacity: 1, scale: 1.2 }}
-                         exit={{ opacity: 0, scale: 1.5 }}
-                         transition={{ duration: 0.5, type: 'spring', damping: 15 }}
-                         className="absolute inset-0 flex items-center justify-center pointer-events-none z-10"
-                       >
-                         <Heart className="size-24 fill-red-500 text-red-500 drop-shadow-2xl" />
-                       </motion.div>
-                     )}
-                   </AnimatePresence>
-                 </motion.div>
+
+                  {post.type === 'gallery' && post.gallery ? (
+                    <div className="w-full h-full flex overflow-x-auto snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                      {post.gallery.map((img: string, i: number) => (
+                         <img key={i} src={img} alt="" className="w-full h-full object-cover shrink-0 snap-center" loading="lazy" />
+                      ))}
+                      <div className="absolute top-3 right-3 bg-black/50 text-white text-xs px-2 py-1 rounded-full backdrop-blur-md font-bold">
+                        1/{post.gallery.length}
+                      </div>
+                    </div>
+                  ) : post.media_url.match(/\.(mp4|webm|ogg)$/i) ? (
+                    <video src={post.media_url} className="size-full object-cover" controls preload="metadata" />
+                  ) : (
+                    <img src={post.media_url} alt="Post media" className="size-full object-cover pointer-events-none" loading="lazy" />
+                  )}
+                </div>
               )}
 
-              <div className="mt-3 flex items-center gap-5 text-foreground">
-                <ActionButton
-                  icon={
-                    <motion.div
-                      animate={post.isLiked ? { scale: [1, 1.2, 1] } : { scale: [1, 0.9, 1] }}
-                      transition={{ duration: 0.3 }}
-                    >
-                      <Heart className={`size-5 transition-colors ${post.isLiked ? 'fill-red-500 text-red-500' : ''}`} />
-                    </motion.div>
-                  }
-                  label={post.likes_count?.toString() || "٠"}
-                  onClick={() => handleLike(post.id)}
-                />
-                <ActionButton
-                  icon={<MessageCircle className="size-5" />}
-                  label={post.comments_count?.toString() || "٠"}
-                  onClick={async () => {
-                    const text = prompt("أدخل تعليقك:");
-                    if (text && text.trim()) {
-                      const user = auth?.currentUser;
-                      if (!user) return alert("يجب تسجيل الدخول");
-                      try {
-                         await supabase.from('post_comments').insert({ post_id: post.id, user_id: user.uid, text });
-                         fetchFeedData();
-                      } catch (e) {
-                         console.error(e);
-                      }
+              <div className="flex items-center gap-5 px-4 pt-1 pb-2">
+                <div
+                  className="flex items-center gap-1.5 active:opacity-50 transition-opacity touch-none cursor-pointer"
+                  onPointerDown={() => handleLikePointerDown(post.id)}
+                  onPointerUp={() => handleLikePointerUp(post.id)}
+                  onPointerLeave={() => {
+                    if (likesPressTimer.current) {
+                      clearTimeout(likesPressTimer.current)
+                      likesPressTimer.current = null
                     }
+                  }}
+                >
+                  <Heart className={`size-6 ${post.isLiked ? 'fill-red-500 text-red-500' : 'text-foreground'}`} />
+                  <span className="text-sm font-bold text-foreground">
+                    {post.likes_count || 0}
+                  </span>
+                </div>
+
+                <ActionButton
+                  icon={<MessageCircle className="size-6 text-foreground" />}
+                  label={post.comments_count?.toString()}
+                  onClick={() => {
+                    setActiveCommentsPostId(post.id)
+                    setActiveCommentsPostOwnerId(post.user_id)
                   }}
                 />
                 <ActionButton
@@ -421,36 +651,70 @@ export function HomeFeed() {
                      navigator.clipboard.writeText(window.location.href).catch(() => {});
                   }}
                 />
-                <button
+                <motion.button
+                  whileTap={{ scale: 0.8 }}
                   className={`mr-auto text-foreground ${post.isSaved ? 'fill-foreground' : ''}`}
                   aria-label="حفظ"
-                  onClick={async () => {
-                    const user = auth?.currentUser;
-                    if (!user) return alert("يجب تسجيل الدخول");
-                    setPosts(current => current.map(p => p.id === post.id ? { ...p, isSaved: !p.isSaved } : p));
-                    try {
-                      if (!post.isSaved) {
-                        await supabase.from('saves').insert({ post_id: post.id, user_id: user.uid });
-                      } else {
-                        await supabase.from('saves').delete().eq('post_id', post.id).eq('user_id', user.uid);
-                      }
-                    } catch(e) {
-                      console.error(e);
-                      fetchFeedData();
-                    }
-                  }}
+                  onClick={(e: React.MouseEvent) => handleSave(e, post.id)}
                 >
-                  <Bookmark className={`size-5 ${post.isSaved ? 'fill-foreground' : ''}`} />
-                </button>
+                  <motion.div animate={post.isSaved ? { scale: [1, 1.2, 1] } : { scale: 1 }} transition={{ duration: 0.3 }}>
+                    <Bookmark className={`size-5 ${post.isSaved ? 'fill-foreground' : ''}`} />
+                  </motion.div>
+                </motion.button>
               </div>
             </motion.article>
-          )) : (
-            <div className="py-12 text-center text-muted-foreground">
-              لا توجد منشورات حتى الآن. كن أول من ينشر!
+          )}) : (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.5, type: 'spring', damping: 20 }}
+              className="py-24 flex flex-col items-center justify-center text-center px-6"
+            >
+              <div className="size-20 rounded-full bg-secondary flex items-center justify-center mb-6">
+                <Sparkles className="size-10 text-primary animate-pulse" />
+              </div>
+              <h3 className="text-xl font-bold mb-2 text-foreground">لا توجد منشورات.</h3>
+              <p className="text-muted-foreground max-w-sm">
+                ابدأ بمتابعة الأشخاص أو انشر شيئاً جديداً!
+              </p>
+            </motion.div>
+          )}
+
+          {/* Infinite Scroll trigger area */}
+          {!loading && hasNextPage && (
+            <div ref={loadMoreRef} className="py-8 flex justify-center">
+              {isFetchingNextPage ? (
+                <Loader2 className="size-6 animate-spin text-muted-foreground" />
+              ) : (
+                <div className="h-6" /> /* Spacing for the observer */
+              )}
             </div>
           )}
         </motion.div>
       )}
+
+        <LikesSheet
+          postId={activeLikesPostId}
+          isOpen={!!activeLikesPostId}
+          onClose={() => setActiveLikesPostId(null)}
+        />
+
+        <CommentsSheet
+          postId={activeCommentsPostId}
+          postOwnerId={activeCommentsPostOwnerId}
+          isOpen={!!activeCommentsPostId}
+          onClose={() => {
+            setActiveCommentsPostId(null)
+            setActiveCommentsPostOwnerId(null)
+          }}
+        />
+
+      <PostOptionsSheet
+        post={activeOptionsPost}
+        isOpen={!!activeOptionsPost}
+        onClose={() => setActiveOptionsPost(null)}
+      />
+      </motion.div>
     </div>
   )
 }
@@ -458,7 +722,7 @@ export function HomeFeed() {
 function ActionButton({ icon, label, onClick }: { icon: React.ReactNode; label?: string; onClick?: () => void }) {
   return (
     <motion.button
-      whileTap={{ scale: 0.85 }}
+      whileTap={{ scale: 0.8 }}
       onClick={onClick}
       className="flex items-center gap-1.5 text-sm"
     >

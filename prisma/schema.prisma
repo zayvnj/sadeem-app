@@ -1,0 +1,220 @@
+// 1. الإعدادات الأساسية
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ==========================================
+// 2. الجداول (المجرات والنجوم في تطبيق سديم)
+// ==========================================
+
+// جدول المستخدمين
+model User {
+  id                   String   @id @default(uuid())
+  username             String   @unique
+  email                String   @unique
+  password             String?
+  fullName             String?
+  bio                  String?
+  avatarUrl            String?
+  coverImage           String?
+  coverUrl             String?
+  isOnline             Boolean  @default(false)
+  role                 String   @default("USER")
+  isVerified           Boolean  @default(false)
+  isProfessional       Boolean  @default(false)
+  professionalCategory String?
+  lastActive           DateTime @default(now())
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  // العلاقات
+  posts        Post[]
+  reels        Reel[]
+  stories      Story[]
+  storyViews   StoryView[]
+  comments     Comment[]
+  likes        Like[]
+  savedPosts   SavedPost[]
+  messagesSent Message[]   @relation("Sender")
+
+  // المحادثات
+  chats Chat[] @relation("ChatParticipants")
+
+  // نظام المتابعة
+  followers Follow[] @relation("UserFollowers")
+  following Follow[] @relation("UserFollowing")
+
+  // الإشعارات
+  notifications Notification[]
+}
+
+// جدول المحادثات (الدردشة الجماعية أو الثنائية)
+model Chat {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  participants User[]    @relation("ChatParticipants")
+  messages     Message[]
+}
+
+// جدول نظام المتابعة (Followers & Following)
+model Follow {
+  id          Int      @id @default(autoincrement())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId]) // يمنع متابعة نفس الشخص مرتين
+}
+
+// جدول المنشورات والريلز (Posts & Reels)
+model Post {
+  id        String   @id @default(uuid())
+  caption   String?
+  mediaUrl  String
+  mediaType String   @default("IMAGE") // يمكن أن يكون: IMAGE (صورة), VIDEO (فيديو), REEL (ريلز)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  comments Comment[]
+  likes    Like[]
+  savedBy  SavedPost[]
+}
+
+// جدول الستوريات (القصص اليومية)
+model Story {
+  id        String   @id @default(uuid())
+  mediaUrl  String
+  createdAt DateTime @default(now())
+  expiresAt DateTime // وقت الانتهاء بعد 24 ساعة
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  views StoryView[]
+  likes Like[]
+}
+
+// جدول مشاهدات القصص
+model StoryView {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  storyId String
+  story   Story  @relation(fields: [storyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, storyId]) // يمنع تسجيل مشاهدة نفس القصة أكثر من مرة لنفس المستخدم
+}
+
+// جدول التعليقات
+model Comment {
+  id        String   @id @default(uuid())
+  text      String
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  postId String?
+  post   Post?   @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  reelId String?
+  reel   Reel?   @relation(fields: [reelId], references: [id], onDelete: Cascade)
+}
+
+// جدول الإعجابات (اللايكات)
+model Like {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  postId String?
+  post   Post?   @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  reelId String?
+  reel   Reel?   @relation(fields: [reelId], references: [id], onDelete: Cascade)
+
+  storyId String?
+  story   Story?  @relation(fields: [storyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId]) // يمنع إعطاء لايكين من نفس الشخص لنفس المنشور
+  @@unique([userId, reelId]) // يمنع إعطاء لايكين من نفس الشخص لنفس الريل
+  @@unique([userId, storyId]) // يمنع إعطاء لايكين من نفس الشخص لنفس القصة
+}
+
+// جدول المحفوظات (Saved Posts)
+model SavedPost {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  postId String?
+  post   Post?   @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  reelId String?
+  reel   Reel?   @relation(fields: [reelId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId]) // يمنع حفظ نفس المنشور أكثر من مرة لنفس الشخص
+  @@unique([userId, reelId]) // يمنع حفظ نفس الريل أكثر من مرة لنفس الشخص
+}
+
+// جدول الرسائل (الدردشة)
+model Message {
+  id        String   @id @default(uuid())
+  text      String?
+  mediaUrl  String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  chat_id String
+  chat    Chat   @relation(fields: [chat_id], references: [id], onDelete: Cascade)
+
+  senderId String
+  sender   User   @relation("Sender", fields: [senderId], references: [id], onDelete: Cascade)
+}
+
+// جدول الإشعارات
+model Notification {
+  id        String   @id @default(uuid())
+  type      String // نوع الإشعار: LIKE, COMMENT, FOLLOW
+  content   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// جدول الريلز (Reels)
+model Reel {
+  id        String   @id @default(uuid())
+  videoUrl  String
+  caption   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  likes    Like[]
+  comments Comment[]
+  savedBy  SavedPost[]
+}

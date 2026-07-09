@@ -1,6 +1,7 @@
 "use client"
 
 import React, { createContext, useContext, useState, ReactNode } from "react"
+import { useSession } from "@/lib/auth-context"
 
 interface NavigationContextType {
   selectedUserId: string | null
@@ -9,20 +10,38 @@ interface NavigationContextType {
   setStoryViewerData: (data: { stories: any[]; initialIndex: number } | null) => void
   showStoryUpload: boolean
   setShowStoryUpload: (show: boolean) => void
+  showCreatePost: boolean
+  setShowCreatePost: (show: boolean) => void
+  showMediaStudio: boolean
+  setShowMediaStudio: (show: boolean) => void
 }
 
 const NavigationContext = createContext<NavigationContextType | undefined>(undefined)
 
 export function NavigationProvider({ children }: { children: ReactNode }) {
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
+  const [selectedUserId, setSelectedUserIdState] = useState<string | null>(null)
   const [storyViewerData, setStoryViewerData] = useState<{ stories: any[]; initialIndex: number } | null>(null)
   const [showStoryUpload, setShowStoryUpload] = useState<boolean>(false)
+  const [showCreatePost, setShowCreatePost] = useState<boolean>(false)
+  const [showMediaStudio, setShowMediaStudio] = useState<boolean>(false)
+  const { data: session } = useSession()
+
+  const setSelectedUserId = (id: string | null) => {
+    if (id && session?.user?.id === id) {
+      window.dispatchEvent(new CustomEvent('switch-tab', { detail: 'profile' }))
+      setSelectedUserIdState(null)
+    } else {
+      setSelectedUserIdState(id)
+    }
+  }
 
   return (
     <NavigationContext.Provider value={{
       selectedUserId, setSelectedUserId,
       storyViewerData, setStoryViewerData,
-      showStoryUpload, setShowStoryUpload
+      showStoryUpload, setShowStoryUpload,
+      showCreatePost, setShowCreatePost,
+      showMediaStudio, setShowMediaStudio
     }}>
       {children}
     </NavigationContext.Provider>

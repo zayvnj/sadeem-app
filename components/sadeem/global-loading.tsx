@@ -7,7 +7,7 @@ export function GlobalLoadingScreen() {
       initial={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.4, ease: "easeInOut" }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#030305]"
+      className="fixed inset-0 h-[100dvh] z-50 flex items-center justify-center bg-[#030305]"
     >
       <motion.div
         animate={{
@@ -20,7 +20,7 @@ export function GlobalLoadingScreen() {
           repeat: Infinity,
         }}
       >
-        <Logo className="h-32 w-32 md:h-48 md:w-48" />
+        <Logo className="text-6xl md:text-8xl" />
       </motion.div>
     </motion.div>
   )

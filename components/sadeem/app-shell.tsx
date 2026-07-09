@@ -2,57 +2,77 @@
 
 import { useState, useEffect } from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { Heart, Send, PlusSquare } from "lucide-react"
-import { onAuthStateChanged, User } from "firebase/auth"
-import { auth } from "@/lib/firebase"
+import { Heart, Send, PlusSquare, Clapperboard, Loader2 } from "lucide-react"
 import { App } from '@capacitor/app'
 import { Capacitor } from '@capacitor/core'
 import { toast } from 'sonner'
+import { useSession } from "@/lib/auth-context"
+import { updateLastActive } from "@/app/actions/user"
 import { BottomNav } from "./bottom-nav"
+import { AccountSwitcherSheet } from "./account-switcher-sheet"
 import { HomeFeed } from "./home-feed"
 import { ReelsView } from "./reels-view"
-import { AddView } from "./add-view"
+import { MediaStudio } from "./media-studio"
 import { ChatView } from "./chat-view"
 import { ProfileView } from "./profile-view"
 import { PublicProfileView } from "./public-profile-view"
+import { StoryViewer } from "./story-viewer"
+import { useQueryClient } from "@tanstack/react-query"
 import { AuthView } from "./auth-view"
 import { NotificationsView } from "./notifications-view"
 import { AIAssistantView } from "./ai-assistant-view"
+import { SearchView } from "./search-view"
 import { NavigationProvider, useNavigation } from "./navigation-context"
 import { Logo } from "./logo"
 import { GlobalLoadingScreen } from "./global-loading"
+import { ThemeToggle } from "./theme-toggle"
 import type { TabKey } from "./types"
 
 const titles: Record<TabKey, string> = {
   home: "سديم",
   reels: "ريلز",
-  add: "إنشاء",
   chat: "المحادثات",
   profile: "الملف الشخصي",
   notifications: "الإشعارات",
   aiAssistant: "المساعد الذكي",
+  search: "البحث",
 }
 
 function AppShellContent() {
   const [active, setActive] = useState<TabKey>("home")
-  const [user, setUser] = useState<User | null>(null)
-  const [loadingAuth, setLoadingAuth] = useState(true)
+  const sessionData = useSession();
+  const session = sessionData?.data;
+  const status = sessionData?.status;
+  const loadingAuth = status === "loading"
+  const user = session?.user || null
   const [isSingleChatOpen, setIsSingleChatOpen] = useState(false)
-  const { selectedUserId, setSelectedUserId } = useNavigation()
+  const [showAccountSwitcher, setShowAccountSwitcher] = useState(false)
+  const { selectedUserId, setSelectedUserId, setShowCreatePost, showCreatePost, storyViewerData, setStoryViewerData } = useNavigation()
+  const [isUploadingReel, setIsUploadingReel] = useState(false)
   const isReels = active === "reels"
+  const queryClient = useQueryClient()
 
   const [backPressCount, setBackPressCount] = useState(0)
 
   useEffect(() => {
-    if (!auth) {
-      setLoadingAuth(false)
-      return
+    if (user) {
+      updateLastActive().catch(err => console.error("Failed to update last active:", err));
     }
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser)
-      setLoadingAuth(false)
-    })
-    return () => unsubscribe()
+  }, [user])
+
+  useEffect(() => {
+    // Listen for custom event to switch tabs from deeply nested components
+    const handleSwitchTab = (e: Event) => {
+      const customEvent = e as CustomEvent
+      if (customEvent.detail) {
+        setActive(customEvent.detail as TabKey)
+      }
+    }
+    window.addEventListener('switch-tab', handleSwitchTab)
+
+    return () => {
+      window.removeEventListener('switch-tab', handleSwitchTab)
+    }
   }, [])
 
   // Capacitor Hardware Back Button Handler (PopScope Equivalent)
@@ -114,86 +134,123 @@ function AppShellContent() {
       ) : !loadingAuth && user ? (
         <div className="flex min-h-dvh w-full items-center justify-center bg-secondary p-0 sm:p-6">
           {/* Phone frame */}
-      <div
-        className={`relative flex h-dvh w-full max-w-md flex-col overflow-hidden sm:h-[860px] sm:rounded-[2.5rem] sm:border-8 sm:shadow-2xl transition-colors duration-300 ${
-          isReels ? "bg-black sm:border-black" : "bg-background sm:border-foreground"
-        }`}
-      >
-        {/* Header */}
-        <header
-          className={`flex shrink-0 items-center justify-between px-4 py-3 transition-colors duration-300 ${
-            isReels ? "bg-black text-white" : "bg-background text-foreground"
-          }`}
-        >
-          <motion.div
-            key={active}
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex items-center"
+          <div
+            className={`relative flex h-dvh w-full max-w-md flex-col overflow-hidden sm:h-[860px] sm:rounded-[2.5rem] sm:border-8 sm:shadow-2xl transition-colors duration-300 ${
+              isReels ? "bg-black sm:border-black" : "bg-background sm:border-foreground"
+            }`}
           >
-            {active === "home" ? (
-              <Logo className="w-10 h-10" />
-            ) : (
-              <h1 className="text-xl font-bold tracking-tight">
-                {titles[active]}
-              </h1>
+            {/* Header - Only visible on Home feed */}
+            {active === "home" && (
+              <header
+                className={`flex shrink-0 items-center justify-between px-4 py-3 transition-colors duration-300 relative z-50 ${
+                  isReels ? "bg-black text-white" : "bg-background text-foreground"
+                }`}
+              >
+                {/* Header Left - Messages */}
+                <div className="flex-1">
+                  <button onClick={() => setActive("chat")} className="rounded-full p-1 hover:bg-secondary transition-colors">
+                    <Send className="size-6" />
+                  </button>
+                </div>
+
+                {/* Header Center - Logo */}
+                <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none">
+                  <Logo className="text-3xl" />
+                </div>
+
+                {/* Header Right - Notifications and Theme */}
+                <div className="flex-1 flex justify-end gap-2 items-center">
+                  <ThemeToggle className="-ml-1" />
+                  <button onClick={() => setActive("notifications")} className="rounded-full p-1 hover:bg-secondary transition-colors">
+                    <Heart className="size-6" />
+                  </button>
+                </div>
+              </header>
             )}
-          </motion.div>
-          {active === "home" && (
-            <div className="flex items-center gap-4">
-              <button onClick={() => setActive("add")} className="rounded-full p-1 hover:bg-secondary transition-colors">
-                <PlusSquare className="size-6" />
-              </button>
-              <button onClick={() => setActive("notifications")} className="rounded-full p-1 hover:bg-secondary transition-colors">
-                <Heart className="size-6" />
-              </button>
-              <button onClick={() => setActive("chat")} className="rounded-full p-1 hover:bg-secondary transition-colors">
-                <Send className="size-6" />
-              </button>
-            </div>
-          )}
-        </header>
 
-        {/* Content */}
-        <main className="relative flex-1 overflow-hidden">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={active}
-              initial={{ opacity: 0, x: 24 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -24 }}
-              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-              className={`absolute inset-0 ${isReels ? "" : "overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"}`}
-            >
-              {active === "home" && <HomeFeed />}
-              {active === "reels" && <ReelsView />}
-              {active === "add" && <AddView />}
-              {active === "chat" && <ChatView onChatOpenStateChange={setIsSingleChatOpen} />}
-              {active === "profile" && <ProfileView />}
-              {active === "notifications" && <NotificationsView />}
-              {active === "aiAssistant" && <AIAssistantView />}
-            </motion.div>
-          </AnimatePresence>
+            {/* Content */}
+            <main className="relative flex-1 overflow-hidden pointer-events-auto">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={active}
+                  initial={{ opacity: 0, x: 24 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -24 }}
+                  transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                  className={`absolute inset-0 ${isReels ? "" : "overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"} z-0`}
+                >
+                  {active === "home" && <HomeFeed />}
+                  {active === "reels" && <ReelsView />}
 
-          {/* Public Profile View Overlay */}
-          <AnimatePresence>
-            {selectedUserId && (
-              <PublicProfileView
-                userId={selectedUserId}
-                onBack={() => setSelectedUserId(null)}
-              />
+                  {active === "chat" && <ChatView onChatOpenStateChange={setIsSingleChatOpen} />}
+                  {active === "profile" && <ProfileView />}
+                  {active === "notifications" && <NotificationsView />}
+                  {active === "aiAssistant" && <AIAssistantView />}
+                  {active === "search" && <SearchView />}
+                </motion.div>
+              </AnimatePresence>
+
+              {/* Public Profile View Overlay */}
+              <AnimatePresence>
+                {selectedUserId && (
+                  <PublicProfileView
+                    userId={selectedUserId}
+                    onBack={() => setSelectedUserId(null)}
+                  />
+                )}
+              </AnimatePresence>
+            </main>
+
+            {/* Bottom navigation */}
+            {!isSingleChatOpen && !selectedUserId && (
+              <div className="shrink-0 overflow-visible relative z-50">
+                <BottomNav active={active} onChange={setActive} dark={isReels} onAvatarLongPress={() => setShowAccountSwitcher(true)} />
+              </div>
             )}
-          </AnimatePresence>
-        </main>
 
-          {/* Bottom navigation */}
-          {!isSingleChatOpen && !selectedUserId && (
-            <div className="shrink-0 overflow-visible relative z-50">
-              <BottomNav active={active} onChange={setActive} dark={isReels} />
-            </div>
-          )}
+            <AccountSwitcherSheet
+              isOpen={showAccountSwitcher}
+              onClose={() => setShowAccountSwitcher(false)}
+            />
+
+            {/* Story Viewer Global Overlay */}
+            <AnimatePresence>
+              {storyViewerData && (
+                <StoryViewer
+                  stories={storyViewerData.stories}
+                  initialStoryIndex={storyViewerData.initialIndex}
+                  onClose={() => {
+                    setStoryViewerData(null)
+                    queryClient.invalidateQueries({ queryKey: ['feed', 'stories'] })
+                  }}
+                  onComplete={() => {
+                    // Try to auto-advance to next user's stories if available
+                    // We need to fetch current stories from cache to know the order
+                    const cachedStories: any[] = queryClient.getQueryData(['feed', 'stories']) || []
+                    const currentUserStoriesIndex = cachedStories.findIndex(
+                      (userGroup: any) => userGroup[0]?.user_id === storyViewerData.stories[0].user_id || userGroup.id === storyViewerData.stories[0].user_id
+                    )
+
+                    if (currentUserStoriesIndex >= 0 && currentUserStoriesIndex < cachedStories.length - 1) {
+                      const nextUserGroup = cachedStories[currentUserStoriesIndex + 1]
+                      // handle both array and object formats
+                      const nextUserStories = Array.isArray(nextUserGroup) ? nextUserGroup : (nextUserGroup.stories || [])
+                      const firstUnseenIndex = nextUserStories.findIndex((s: any) => !s.isViewed)
+
+                      setStoryViewerData({
+                        stories: nextUserStories,
+                        initialIndex: firstUnseenIndex >= 0 ? firstUnseenIndex : 0
+                      })
+                    } else {
+                      setStoryViewerData(null)
+                      queryClient.invalidateQueries({ queryKey: ['feed', 'stories'] })
+                    }
+                  }}
+                />
+              )}
+            </AnimatePresence>
+          </div>
         </div>
-      </div>
       ) : null}
     </>
   )
@@ -203,6 +260,7 @@ export function AppShell() {
   return (
     <NavigationProvider>
       <AppShellContent />
+      <MediaStudio />
     </NavigationProvider>
   )
 }
