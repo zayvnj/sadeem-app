@@ -2,9 +2,12 @@
 
 import { useState, useEffect } from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { Heart, Send } from "lucide-react"
+import { Heart, Send, PlusSquare } from "lucide-react"
 import { onAuthStateChanged, User } from "firebase/auth"
 import { auth } from "@/lib/firebase"
+import { App } from '@capacitor/app'
+import { Capacitor } from '@capacitor/core'
+import { toast } from 'sonner'
 import { BottomNav } from "./bottom-nav"
 import { HomeFeed } from "./home-feed"
 import { ReelsView } from "./reels-view"
@@ -14,6 +17,7 @@ import { ProfileView } from "./profile-view"
 import { PublicProfileView } from "./public-profile-view"
 import { AuthView } from "./auth-view"
 import { NotificationsView } from "./notifications-view"
+import { AIAssistantView } from "./ai-assistant-view"
 import { NavigationProvider, useNavigation } from "./navigation-context"
 import { Logo } from "./logo"
 import { GlobalLoadingScreen } from "./global-loading"
@@ -26,6 +30,7 @@ const titles: Record<TabKey, string> = {
   chat: "المحادثات",
   profile: "الملف الشخصي",
   notifications: "الإشعارات",
+  aiAssistant: "المساعد الذكي",
 }
 
 function AppShellContent() {
@@ -35,6 +40,8 @@ function AppShellContent() {
   const [isSingleChatOpen, setIsSingleChatOpen] = useState(false)
   const { selectedUserId, setSelectedUserId } = useNavigation()
   const isReels = active === "reels"
+
+  const [backPressCount, setBackPressCount] = useState(0)
 
   useEffect(() => {
     if (!auth) {
@@ -47,6 +54,50 @@ function AppShellContent() {
     })
     return () => unsubscribe()
   }, [])
+
+  // Capacitor Hardware Back Button Handler (PopScope Equivalent)
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return
+
+    const handleBackButton = async () => {
+      // Priority 1: Close Modals/Overlays
+      if (selectedUserId) {
+        setSelectedUserId(null)
+        return
+      }
+
+      if (isSingleChatOpen) {
+        // Active chat view handles its own close state or we can reset to main chat tab
+        setIsSingleChatOpen(false)
+        setActive('chat')
+        return
+      }
+
+      // Priority 2: Not on Home tab? Go to Home tab
+      if (active !== 'home') {
+        setActive('home')
+        return
+      }
+
+      // Priority 3: On Home Tab, handle Double Tap to Exit
+      if (backPressCount === 0) {
+        setBackPressCount(1)
+        toast('اضغط مرة أخرى للخروج', {
+          duration: 2000,
+          position: 'bottom-center'
+        })
+        setTimeout(() => setBackPressCount(0), 2000)
+      } else if (backPressCount === 1) {
+        App.exitApp()
+      }
+    }
+
+    const backButtonListener = App.addListener('backButton', handleBackButton)
+
+    return () => {
+      backButtonListener.then(listener => listener.remove())
+    }
+  }, [active, selectedUserId, isSingleChatOpen, backPressCount, setSelectedUserId])
 
   return (
     <>
@@ -90,6 +141,9 @@ function AppShellContent() {
           </motion.div>
           {active === "home" && (
             <div className="flex items-center gap-4">
+              <button onClick={() => setActive("add")} className="rounded-full p-1 hover:bg-secondary transition-colors">
+                <PlusSquare className="size-6" />
+              </button>
               <button onClick={() => setActive("notifications")} className="rounded-full p-1 hover:bg-secondary transition-colors">
                 <Heart className="size-6" />
               </button>
@@ -117,6 +171,7 @@ function AppShellContent() {
               {active === "chat" && <ChatView onChatOpenStateChange={setIsSingleChatOpen} />}
               {active === "profile" && <ProfileView />}
               {active === "notifications" && <NotificationsView />}
+              {active === "aiAssistant" && <AIAssistantView />}
             </motion.div>
           </AnimatePresence>
 
@@ -133,7 +188,7 @@ function AppShellContent() {
 
           {/* Bottom navigation */}
           {!isSingleChatOpen && !selectedUserId && (
-            <div className="shrink-0">
+            <div className="shrink-0 overflow-visible relative z-50">
               <BottomNav active={active} onChange={setActive} dark={isReels} />
             </div>
           )}

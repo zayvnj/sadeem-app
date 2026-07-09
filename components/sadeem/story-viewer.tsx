@@ -197,6 +197,9 @@ export function StoryViewer({ stories, initialStoryIndex = 0, onClose, onComplet
       exit={{ opacity: 0, y: 50 }}
       className="fixed inset-0 z-[100] bg-black text-white flex flex-col"
     >
+      {/* Dark gradient for Header visibility */}
+      <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-black/80 to-transparent z-10 pointer-events-none" />
+
       {/* Progress Bars */}
       <div className="absolute top-0 left-0 right-0 p-4 z-10 flex gap-1 pt-12">
         {stories.map((s, i) => (
@@ -256,7 +259,7 @@ export function StoryViewer({ stories, initialStoryIndex = 0, onClose, onComplet
       {storyUser?.id !== auth?.currentUser?.uid && (
         <form
           onSubmit={handleReply}
-          className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent z-10"
+          className="absolute bottom-0 left-0 right-0 p-4 pt-12 bg-gradient-to-t from-black/90 via-black/50 to-transparent z-10"
         >
           <div className="flex items-center gap-2 max-w-md mx-auto relative">
             <input

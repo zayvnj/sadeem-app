@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Heart, MessageCircle, Send, Music2, Play, Volume2, VolumeX, Loader2, BadgeCheck } from "lucide-react"
 import { supabase } from "@/lib/supabase"
@@ -136,6 +136,7 @@ export function ReelsView() {
 }
 
 function ReelItem({ reel, handleLike, index }: { reel: any, handleLike: (id: string, isDoubleTap?: boolean) => void, index: number }) {
+  const { setSelectedUserId } = useNavigation()
   const [isPlaying, setIsPlaying] = useState(true)
   const [isMuted, setIsMuted] = useState(false)
   const [progress, setProgress] = useState(0)
@@ -335,7 +336,7 @@ function ReelItem({ reel, handleLike, index }: { reel: any, handleLike: (id: str
             {reel.users?.is_verified && <BadgeCheck className="size-4 text-blue-400 drop-shadow-sm" />}
           </p>
         </div>
-        <p className="text-sm leading-relaxed text-pretty text-white/90 drop-shadow-md">{reel.text || reel.caption || ""}</p>
+        <p className="text-sm leading-relaxed text-pretty text-white/90 drop-shadow-md selectable-text">{reel.text || reel.caption || ""}</p>
         <div className="mt-1 flex items-center gap-2 text-xs text-white/80 drop-shadow-md">
           <Music2 className="size-4" />
           <span className="truncate">الصوت الأصلي</span>

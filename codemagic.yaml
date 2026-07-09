@@ -1,0 +1,36 @@
+workflows:
+  android-release:
+    name: Sadeem Android Release
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+    environment:
+      node: 22.0.0
+      java: 21
+      groups:
+        - zain
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: 'zain'
+          include: true
+          source: true
+    scripts:
+      - name: Decode Android Keystore
+        script: |
+          echo "$KEYSTORE_FILE" | base64 --decode > android/app/sadeem-release-key.jks
+      - name: Install dependencies
+        script: |
+          npm install --force
+      - name: Build Next.js
+        script: |
+          npm run build
+      - name: Sync Capacitor
+        script: |
+          npx cap sync android
+      - name: Build Android Release APK
+        script: |
+          cd android
+          ./gradlew assembleRelease -PstorePassword=$KEYSTORE_PASSWORD -PkeyPassword=$KEYSTORE_PASSWORD -PkeyAlias=$KEY_ALIAS
+    artifacts:
+      - android/app/build/outputs/apk/release/**/*.apk

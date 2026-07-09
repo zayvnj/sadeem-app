@@ -121,6 +121,20 @@
   }
   body {
     @apply bg-background text-foreground;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Allow text selection in inputs, textareas, and other editable areas */
+  input, textarea, [contenteditable="true"] {
+    -webkit-user-select: auto;
+    user-select: auto;
+  }
+
+  /* Specifically allow text selection where requested via utility class */
+  .selectable-text {
+    -webkit-user-select: text;
+    user-select: text;
   }
 }
 

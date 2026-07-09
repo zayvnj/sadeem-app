@@ -123,7 +123,7 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
 
         if (error) throw error
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error toggling follow:", error)
       toast.error(error.message || "حدث خطأ أثناء تغيير حالة المتابعة")
 
@@ -273,7 +273,7 @@ export function PublicProfileView({ userId, onBack }: PublicProfileViewProps) {
                   <img src={post.media_url} alt="" className="size-full object-cover" />
                 )
               ) : (
-                <div className="size-full flex flex-col p-2 text-xs text-muted-foreground overflow-hidden">
+                <div className="size-full flex flex-col p-2 text-xs text-muted-foreground overflow-hidden selectable-text">
                   <p className="line-clamp-4">{post.text}</p>
                 </div>
               )}
