@@ -18,6 +18,8 @@ import { VerifiedBadge } from "./verified-badge"
 import { useInView } from "react-intersection-observer"
 import { toast } from "sonner"
 import { FullScreenImageViewer } from "./full-screen-image-viewer"
+import { FeedSkeleton, BlurImage } from "./skeletons"
+import { ShareSheet } from "./share-sheet"
 
 const container = {
   hidden: { opacity: 0 },
@@ -34,7 +36,7 @@ const item = {
 
 export function HomeFeed() {
   const [viewedStoryIds, setViewedStoryIds] = useState<Set<string>>(new Set())
-  const { setSelectedUserId, storyViewerData, setStoryViewerData, setShowStoryUpload, setShowMediaStudio } = useNavigation()
+  const { setSelectedUserId, storyViewerData, setStoryViewerData, setShowStoryUpload, setShowMediaStudio, setInitialReelId } = useNavigation()
 
   const { data: session } = useSession()
   const currentUser = session?.user
@@ -56,7 +58,7 @@ export function HomeFeed() {
       const res = await getStories()
       return res.success ? res.data : []
     },
-    staleTime: 60000,
+    staleTime: 1000 * 60 * 5,
     networkMode: 'offlineFirst',
   })
 
@@ -68,7 +70,7 @@ export function HomeFeed() {
       const res = await getReels()
       return res.success ? res.data : []
     },
-    staleTime: 60000,
+    staleTime: 1000 * 60 * 5,
     networkMode: 'offlineFirst',
   })
 
@@ -298,6 +300,9 @@ export function HomeFeed() {
   // Options Sheet State
   const [activeOptionsPost, setActiveOptionsPost] = useState<any | null>(null)
 
+  // Share Sheet State (universal sharing into chats)
+  const [activeSharePost, setActiveSharePost] = useState<any | null>(null)
+
   // Lightbox State
   const [activeLightboxImage, setActiveLightboxImage] = useState<string | null>(null)
 
@@ -340,6 +345,39 @@ export function HomeFeed() {
     setDragY(0)
   }
 
+  // Native touch-based pull-to-refresh.
+  // Replaces the framer-motion `drag` container which set touch-action:none,
+  // hijacked native scrolling and swallowed story taps (scroll freeze bug).
+  const feedScrollRef = useRef<HTMLDivElement>(null)
+  const touchStartYRef = useRef<number | null>(null)
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (feedScrollRef.current && feedScrollRef.current.scrollTop <= 0) {
+      touchStartYRef.current = e.touches[0].clientY
+    } else {
+      touchStartYRef.current = null
+    }
+  }
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touchStartYRef.current === null) return
+    const delta = e.touches[0].clientY - touchStartYRef.current
+    if (delta > 0 && feedScrollRef.current && feedScrollRef.current.scrollTop <= 0) {
+      setDragY(Math.min(delta * 0.5, 130))
+    } else if (dragY !== 0) {
+      setDragY(0)
+    }
+  }
+
+  const handleTouchEnd = () => {
+    touchStartYRef.current = null
+    if (dragY > 90 && !isRefreshing) {
+      handleRefresh()
+    } else {
+      setDragY(0)
+    }
+  }
+
   return (
     <div className="pb-4 h-full relative overflow-hidden flex flex-col">
       <StoryUpload
@@ -367,32 +405,13 @@ export function HomeFeed() {
         </div>
       </motion.div>
 
-      {/* Main Feed Content */}
-      <motion.div
-        className="flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        drag="y"
-        dragConstraints={{ top: 0, bottom: 0 }}
-        dragElastic={0.2}
-        onDrag={(e, info) => {
-          // Only allow dragging down when at the top of the scroll container
-          const target = e.target as HTMLElement;
-          const scrollContainer = target.closest('.overflow-y-auto');
-
-          if (scrollContainer && scrollContainer.scrollTop === 0 && info.offset.y > 0) {
-             setDragY(info.offset.y)
-          } else {
-             setDragY(0)
-          }
-        }}
-        onDragEnd={(e, info) => {
-          if (dragY > 100 && !isRefreshing) {
-            handleRefresh()
-          } else {
-            setDragY(0)
-          }
-        }}
-        animate={{ y: isRefreshing ? 60 : 0 }}
-        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+      {/* Main Feed Content - native scrolling restored (no framer drag hijacking touch events) */}
+      <div
+        ref={feedScrollRef}
+        className="flex-1 overflow-y-auto overscroll-y-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       >
 
       {/* Stories horizontal scroll */}
@@ -437,17 +456,16 @@ export function HomeFeed() {
                         )}
                       </div>
                     </div>
-                    {!currentUserStoryGroup && (
-                      <div
-                        className="absolute -bottom-1 -right-1 flex size-6 items-center justify-center rounded-full bg-foreground text-background shadow-sm border-2 border-background cursor-pointer z-20 pointer-events-auto"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowStoryUpload(true);
-                        }}
-                      >
-                        <span className="text-lg leading-none mt-[-2px]">+</span>
-                      </div>
-                    )}
+                    {/* Always visible: the current user can add multiple stories at any time */}
+                    <div
+                      className="absolute -bottom-1 -right-1 flex size-6 items-center justify-center rounded-full bg-foreground text-background shadow-sm border-2 border-background cursor-pointer z-20 pointer-events-auto"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowStoryUpload(true);
+                      }}
+                    >
+                      <span className="text-lg leading-none mt-[-2px]">+</span>
+                    </div>
                   </div>
                   <span className="text-xs font-bold text-foreground">أنت</span>
                 </button>
@@ -497,9 +515,7 @@ export function HomeFeed() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-20">
-          <Loader2 className="size-8 animate-spin text-muted-foreground" />
-        </div>
+        <FeedSkeleton />
       ) : (
         <motion.div variants={container} initial="hidden" animate="show" className="flex flex-col gap-6">
 
@@ -515,7 +531,14 @@ export function HomeFeed() {
                <div className="w-full overflow-x-auto px-4 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                  <div className="flex gap-3">
                    {reels.map((reel: any) => (
-                     <div key={reel.id} className="relative w-[140px] h-[220px] rounded-2xl overflow-hidden shrink-0 bg-secondary group cursor-pointer shadow-sm border border-border/50">
+                     <div
+                       key={reel.id}
+                       onClick={() => {
+                         // Route to the full-screen reels viewer, focused on this reel
+                         setInitialReelId(reel.id)
+                         window.dispatchEvent(new CustomEvent('switch-tab', { detail: 'reels' }))
+                       }}
+                       className="relative w-[140px] h-[220px] rounded-2xl overflow-hidden shrink-0 bg-secondary group cursor-pointer shadow-sm border border-border/50">
                         {reel.media_url && (
                           <video src={reel.media_url} className="size-full object-cover" />
                         )}
@@ -612,7 +635,7 @@ export function HomeFeed() {
                   ) : post.media_url.match(/\.(mp4|webm|ogg)$/i) ? (
                     <video src={post.media_url} className="size-full object-cover" controls preload="metadata" />
                   ) : (
-                    <img src={post.media_url} alt="Post media" className="size-full object-cover pointer-events-none" loading="lazy" />
+                    <BlurImage src={post.media_url} alt="Post media" className="size-full object-cover pointer-events-none" />
                   )}
                 </div>
               )}
@@ -645,11 +668,7 @@ export function HomeFeed() {
                 />
                 <ActionButton
                   icon={<Send className="size-5" />}
-                  onClick={() => {
-                     alert("تمت المشاركة بنجاح!");
-                     // In a real app, open a share sheet or copy link
-                     navigator.clipboard.writeText(window.location.href).catch(() => {});
-                  }}
+                  onClick={() => setActiveSharePost(post)}
                 />
                 <motion.button
                   whileTap={{ scale: 0.8 }}
@@ -714,7 +733,15 @@ export function HomeFeed() {
         isOpen={!!activeOptionsPost}
         onClose={() => setActiveOptionsPost(null)}
       />
-      </motion.div>
+
+      <ShareSheet
+        isOpen={!!activeSharePost}
+        onClose={() => setActiveSharePost(null)}
+        sharedType="POST"
+        sharedId={activeSharePost?.id || null}
+        previewUrl={activeSharePost?.media_url || null}
+      />
+      </div>
     </div>
   )
 }

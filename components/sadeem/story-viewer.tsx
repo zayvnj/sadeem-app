@@ -46,11 +46,18 @@ export function StoryViewer({ stories, initialStoryIndex = 0, onClose, onComplet
 
   useEffect(() => {
     if (currentStory) {
-      markStoryAsViewed(currentStory.id).then(() => {
-        queryClient.invalidateQueries({ queryKey: ['feed', 'stories'] })
-      }).catch(console.error)
+      markStoryAsViewed(currentStory.id).catch(console.error)
     }
-  }, [currentStory, queryClient])
+  }, [currentStory])
+
+  // Refresh the stories ring state once when the viewer unmounts,
+  // instead of refetching the whole stories feed on every story change (major lag source)
+  useEffect(() => {
+    return () => {
+      queryClient.invalidateQueries({ queryKey: ['feed', 'stories'] })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleNext = () => {
     if (currentIndex < stories.length - 1) {
@@ -88,6 +95,15 @@ export function StoryViewer({ stories, initialStoryIndex = 0, onClose, onComplet
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIndex, isPaused, currentStory])
+
+  // Preload the next story's image so transitions are instant
+  useEffect(() => {
+    const next = stories[currentIndex + 1]
+    if (next?.media_url && !next.media_url.match(/\.(mp4|webm|ogg)$/i)) {
+      const img = new window.Image()
+      img.src = next.media_url
+    }
+  }, [currentIndex, stories])
 
   const handlePrev = () => {
     if (currentIndex > 0) {

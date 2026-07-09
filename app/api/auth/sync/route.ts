@@ -29,7 +29,8 @@ export async function POST(request: Request) {
     // Sync with Prisma via upsert
     const generatedUsername = email.split('@')[0] + Math.floor(Math.random() * 1000);
     const adminEmails = ["sly86055r@gmail.com", "zainalabdeensalman123@gmail.com"];
-    const role = adminEmails.includes(email) ? 'ADMIN' : 'USER';
+    const isAdmin = adminEmails.includes(email);
+    const role = isAdmin ? 'ADMIN' : 'USER';
 
     const user = await prisma.user.upsert({
       where: { email },
@@ -38,6 +39,7 @@ export async function POST(request: Request) {
         fullName: name || undefined,
         avatarUrl: photoURL || undefined,
         role: role, // Ensure role is correctly synced
+        ...(isAdmin ? { isVerified: true } : {}), // Admin accounts always carry the blue tick
       },
       create: {
         id: uid, // Use Supabase user.id as the primary key
@@ -46,6 +48,7 @@ export async function POST(request: Request) {
         fullName: name || generatedUsername,
         avatarUrl: photoURL || null,
         role: role,
+        isVerified: isAdmin, // Hardcoded auto-verification for admin emails
       }
     });
 

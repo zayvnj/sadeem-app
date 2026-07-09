@@ -66,6 +66,8 @@ export async function getUserProfile(userId: string) {
         username: true,
         fullName: true,
         avatarUrl: true,
+        coverImage: true,
+        coverUrl: true,
         bio: true,
         isVerified: true,
         isProfessional: true,

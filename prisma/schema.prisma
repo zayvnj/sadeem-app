@@ -186,8 +186,19 @@ model Message {
   id        String   @id @default(uuid())
   text      String?
   mediaUrl  String?
+  mediaType String? // IMAGE | VOICE | VIDEO
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
+
+  // مشاركة المحتوى داخل المحادثة (منشور / ريل / قصة)
+  sharedType String? // POST | REEL | STORY
+  sharedId   String?
+
+  // الاقتباس الجزئي والرد على الرسائل
+  quotedText String?
+  replyToId  String?
+  replyTo    Message?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies    Message[] @relation("MessageReplies")
 
   chat_id String
   chat    Chat   @relation(fields: [chat_id], references: [id], onDelete: Cascade)

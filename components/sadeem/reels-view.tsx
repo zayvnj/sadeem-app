@@ -16,7 +16,7 @@ import { uploadMediaToSupabase } from "@/lib/supabase-storage"
 export function ReelsView() {
   const [reels, setReels] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const { setSelectedUserId } = useNavigation()
+  const { setSelectedUserId, initialReelId, setInitialReelId } = useNavigation()
   const { data: session } = useSession()
   const currentUser = session?.user
 
@@ -140,6 +140,19 @@ export function ReelsView() {
       setActiveReelIndex(newIndex)
     }
   }
+
+  // Deep-link: when opened from a feed thumbnail, jump straight to that reel
+  useEffect(() => {
+    if (!loading && initialReelId && containerRef.current && reels.length > 0) {
+      const idx = reels.findIndex((r) => r.id === initialReelId)
+      if (idx >= 0) {
+        containerRef.current.scrollTo({ top: idx * containerRef.current.clientHeight })
+        setActiveReelIndex(idx)
+      }
+      setInitialReelId(null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, initialReelId, reels])
 
   if (loading) {
     return (
