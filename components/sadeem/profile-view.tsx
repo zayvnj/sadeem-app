@@ -277,7 +277,7 @@ export function ProfileView() {
         return
       }
 
-      setProfile({ ...profile, ...updates, full_name: updates.fullName, avatar_url: updates.avatarUrl })
+      queryClient.setQueryData(['profile', currentUser?.id], (prev: any) => ({ ...(prev || {}), ...updates, full_name: updates.fullName, avatar_url: updates.avatarUrl }))
       setIsEditSheetOpen(false)
       toast.success("تم حفظ الملف الشخصي بنجاح")
     } catch (e: any) {

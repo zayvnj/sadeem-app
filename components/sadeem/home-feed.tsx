@@ -726,7 +726,7 @@ export function HomeFeed() {
         isOpen={!!activeOptionsPost}
         onClose={() => setActiveOptionsPost(null)}
       />
-      </motion.div>
+      </div>
     </div>
   )
 }
