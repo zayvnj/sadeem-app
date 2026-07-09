@@ -96,6 +96,15 @@ export function StoryViewer({ stories, initialStoryIndex = 0, onClose, onComplet
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIndex, isPaused, currentStory])
 
+  // Preload the next story's image so transitions are instant
+  useEffect(() => {
+    const next = stories[currentIndex + 1]
+    if (next?.media_url && !next.media_url.match(/\.(mp4|webm|ogg)$/i)) {
+      const img = new window.Image()
+      img.src = next.media_url
+    }
+  }, [currentIndex, stories])
+
   const handlePrev = () => {
     if (currentIndex > 0) {
       setCurrentIndex((prev) => prev - 1)

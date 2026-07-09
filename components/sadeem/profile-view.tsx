@@ -54,8 +54,6 @@ export function ProfileView() {
   const [activeLightboxImage, setActiveLightboxImage] = useState<string | null>(null)
   const [isEditSheetOpen, setIsEditSheetOpen] = useState(false)
 
-  const [profile, setProfile] = useState<any>(null)
-  const [posts, setPosts] = useState<any[]>([])
   const [savedPosts, setSavedPosts] = useState<any[]>([])
   const [loadingSaved, setLoadingSaved] = useState(false)
   const [archiveStories, setArchiveStories] = useState<any[]>([])

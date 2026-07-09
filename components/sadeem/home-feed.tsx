@@ -57,7 +57,7 @@ export function HomeFeed() {
       const res = await getStories()
       return res.success ? res.data : []
     },
-    staleTime: 60000,
+    staleTime: 1000 * 60 * 5,
     networkMode: 'offlineFirst',
   })
 
@@ -69,7 +69,7 @@ export function HomeFeed() {
       const res = await getReels()
       return res.success ? res.data : []
     },
-    staleTime: 60000,
+    staleTime: 1000 * 60 * 5,
     networkMode: 'offlineFirst',
   })
 
