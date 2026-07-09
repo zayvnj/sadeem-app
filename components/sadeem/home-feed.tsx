@@ -401,32 +401,13 @@ export function HomeFeed() {
         </div>
       </motion.div>
 
-      {/* Main Feed Content */}
-      <motion.div
-        className="flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        drag="y"
-        dragConstraints={{ top: 0, bottom: 0 }}
-        dragElastic={0.2}
-        onDrag={(e, info) => {
-          // Only allow dragging down when at the top of the scroll container
-          const target = e.target as HTMLElement;
-          const scrollContainer = target.closest('.overflow-y-auto');
-
-          if (scrollContainer && scrollContainer.scrollTop === 0 && info.offset.y > 0) {
-             setDragY(info.offset.y)
-          } else {
-             setDragY(0)
-          }
-        }}
-        onDragEnd={(e, info) => {
-          if (dragY > 100 && !isRefreshing) {
-            handleRefresh()
-          } else {
-            setDragY(0)
-          }
-        }}
-        animate={{ y: isRefreshing ? 60 : 0 }}
-        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+      {/* Main Feed Content - native scrolling restored (no framer drag hijacking touch events) */}
+      <div
+        ref={feedScrollRef}
+        className="flex-1 overflow-y-auto overscroll-y-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       >
 
       {/* Stories horizontal scroll */}

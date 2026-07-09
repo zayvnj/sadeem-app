@@ -67,7 +67,6 @@ export function ProfileView() {
   const [editAvatarRemoved, setEditAvatarRemoved] = useState(false)
   const [editLoading, setEditLoading] = useState(false)
   const [editError, setEditError] = useState("")
-  const [loading, setLoading] = useState(true)
 
   const [coverPreview, setCoverPreview] = useState<string | null>(null)
   const [isUploadingCover, setIsUploadingCover] = useState(false)
