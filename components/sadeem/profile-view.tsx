@@ -321,12 +321,8 @@ export function ProfileView() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <Loader2 className="size-8 animate-spin text-muted-foreground" />
-      </div>
-    )
+  if (profileLoading) {
+    return <ProfileSkeleton />
   }
 
   const username = profile?.username || currentUser?.email?.split('@')[0] || "مستخدم_سديم"
