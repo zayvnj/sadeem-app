@@ -452,17 +452,16 @@ export function HomeFeed() {
                         )}
                       </div>
                     </div>
-                    {!currentUserStoryGroup && (
-                      <div
-                        className="absolute -bottom-1 -right-1 flex size-6 items-center justify-center rounded-full bg-foreground text-background shadow-sm border-2 border-background cursor-pointer z-20 pointer-events-auto"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowStoryUpload(true);
-                        }}
-                      >
-                        <span className="text-lg leading-none mt-[-2px]">+</span>
-                      </div>
-                    )}
+                    {/* Always visible: the current user can add multiple stories at any time */}
+                    <div
+                      className="absolute -bottom-1 -right-1 flex size-6 items-center justify-center rounded-full bg-foreground text-background shadow-sm border-2 border-background cursor-pointer z-20 pointer-events-auto"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowStoryUpload(true);
+                      }}
+                    >
+                      <span className="text-lg leading-none mt-[-2px]">+</span>
+                    </div>
                   </div>
                   <span className="text-xs font-bold text-foreground">أنت</span>
                 </button>

@@ -72,12 +72,6 @@ export function ProfileView() {
   const [isUploadingCover, setIsUploadingCover] = useState(false)
   const coverInputRef = useRef<HTMLInputElement>(null)
 
-  const [stats, setStats] = useState([
-    { label: "منشور", value: 0 },
-    { label: "متابِع", value: 0 },
-    { label: "يتابع", value: 0 },
-  ])
-
   const { handleAvatarTap } = useStoryNavigation()
 
   const fileInputRef = useRef<HTMLInputElement>(null)
