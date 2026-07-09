@@ -90,38 +90,42 @@ export function ProfileView() {
   const { data: session } = useSession()
   const currentUser = session?.user
 
+  const queryClient = useQueryClient()
+
+  // Cached profile data: instant on back navigation, refreshed in background when stale
+  const { data: profile, isPending: profileLoading } = useQuery({
+    queryKey: ['profile', currentUser?.id],
+    enabled: !!currentUser?.id,
+    staleTime: 1000 * 60 * 5,
+    networkMode: 'offlineFirst',
+    queryFn: async () => {
+      const res = await getUserProfile(currentUser!.id as string)
+      if (!res.success) throw new Error(typeof res.error === 'string' ? res.error : 'Failed to load profile')
+      return res.data as any
+    },
+  })
+
+  const { data: posts = [] } = useQuery({
+    queryKey: ['profile', currentUser?.id, 'posts'],
+    enabled: !!currentUser?.id,
+    staleTime: 1000 * 60 * 5,
+    networkMode: 'offlineFirst',
+    queryFn: async () => {
+      const res = await getUserPosts(currentUser!.id as string)
+      return res.success && res.data ? (res.data as any[]) : []
+    },
+  })
+
+  const stats = [
+    { label: "منشور", value: posts.length },
+    { label: "متابِع", value: profile?.followersCount || 0 },
+    { label: "يتابع", value: profile?.followingCount || 0 },
+  ]
+
+  // Keep the visible cover photo in sync with persisted data (fixes disappearing cover)
   useEffect(() => {
-    const fetchProfileData = async () => {
-      if (!currentUser?.id) {
-        setLoading(false)
-        return
-      }
-      try {
-        const profileRes = await getUserProfile(currentUser.id)
-        if (profileRes.success && profileRes.data) {
-          const profileData = profileRes.data
-          setProfile(profileData)
-          setStats(prev => prev.map(s => {
-            if(s.label === "متابع") return { ...s, value: profileData.followersCount || 0 }
-            if(s.label === "يتابع") return { ...s, value: profileData.followingCount || 0 }
-            return s
-          }))
-        }
-
-        const postsRes = await getUserPosts(currentUser.id)
-        if (postsRes.success && postsRes.data) {
-          setPosts(postsRes.data as any)
-          setStats(prev => prev.map(s => s.label === "منشور" ? { ...s, value: postsRes.data.length } : s))
-        }
-      } catch (error) {
-        console.error('Error fetching profile data:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchProfileData()
-  }, [currentUser])
+    setCoverPreview(profile?.coverImage || profile?.coverUrl || null)
+  }, [profile])
 
   useEffect(() => {
     if (activeTab === "saved" && savedPosts.length === 0) {
