@@ -192,9 +192,10 @@ export function ProfileView() {
         const res = await updateUserProfile({ coverUrl })
 
         if (res.success) {
-          setProfile((prev: any) => prev ? { ...prev, coverImage: coverUrl, coverUrl: coverUrl } : prev)
+          // Persist into the query cache so the cover survives navigation
+          queryClient.setQueryData(['profile', currentUser?.id], (prev: any) => prev ? { ...prev, coverImage: coverUrl, coverUrl: coverUrl } : prev)
+          setCoverPreview(coverUrl)
           toast.success("تم تحديث صورة الغلاف بنجاح")
-          updateSession()
         } else {
           console.error("Cover upload backend error:", res.error)
           toast.error(res.error || "فشل في تحديث صورة الغلاف")

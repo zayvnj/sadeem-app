@@ -511,9 +511,7 @@ export function HomeFeed() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-20">
-          <Loader2 className="size-8 animate-spin text-muted-foreground" />
-        </div>
+        <FeedSkeleton />
       ) : (
         <motion.div variants={container} initial="hidden" animate="show" className="flex flex-col gap-6">
 
