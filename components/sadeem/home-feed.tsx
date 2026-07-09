@@ -527,7 +527,14 @@ export function HomeFeed() {
                <div className="w-full overflow-x-auto px-4 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                  <div className="flex gap-3">
                    {reels.map((reel: any) => (
-                     <div key={reel.id} className="relative w-[140px] h-[220px] rounded-2xl overflow-hidden shrink-0 bg-secondary group cursor-pointer shadow-sm border border-border/50">
+                     <div
+                       key={reel.id}
+                       onClick={() => {
+                         // Route to the full-screen reels viewer, focused on this reel
+                         setInitialReelId(reel.id)
+                         window.dispatchEvent(new CustomEvent('switch-tab', { detail: 'reels' }))
+                       }}
+                       className="relative w-[140px] h-[220px] rounded-2xl overflow-hidden shrink-0 bg-secondary group cursor-pointer shadow-sm border border-border/50">
                         {reel.media_url && (
                           <video src={reel.media_url} className="size-full object-cover" />
                         )}

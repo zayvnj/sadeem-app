@@ -141,6 +141,19 @@ export function ReelsView() {
     }
   }
 
+  // Deep-link: when opened from a feed thumbnail, jump straight to that reel
+  useEffect(() => {
+    if (!loading && initialReelId && containerRef.current && reels.length > 0) {
+      const idx = reels.findIndex((r) => r.id === initialReelId)
+      if (idx >= 0) {
+        containerRef.current.scrollTo({ top: idx * containerRef.current.clientHeight })
+        setActiveReelIndex(idx)
+      }
+      setInitialReelId(null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, initialReelId, reels])
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-full bg-black">

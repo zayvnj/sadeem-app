@@ -44,7 +44,8 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
       storyViewerData, setStoryViewerData,
       showStoryUpload, setShowStoryUpload,
       showCreatePost, setShowCreatePost,
-      showMediaStudio, setShowMediaStudio
+      showMediaStudio, setShowMediaStudio,
+      initialReelId, setInitialReelId
     }}>
       {children}
     </NavigationContext.Provider>
