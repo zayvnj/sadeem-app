@@ -14,6 +14,8 @@ interface NavigationContextType {
   setShowCreatePost: (show: boolean) => void
   showMediaStudio: boolean
   setShowMediaStudio: (show: boolean) => void
+  initialReelId: string | null
+  setInitialReelId: (id: string | null) => void
 }
 
 const NavigationContext = createContext<NavigationContextType | undefined>(undefined)
