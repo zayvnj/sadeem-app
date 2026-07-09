@@ -733,6 +733,14 @@ export function HomeFeed() {
         isOpen={!!activeOptionsPost}
         onClose={() => setActiveOptionsPost(null)}
       />
+
+      <ShareSheet
+        isOpen={!!activeSharePost}
+        onClose={() => setActiveSharePost(null)}
+        sharedType="POST"
+        sharedId={activeSharePost?.id || null}
+        previewUrl={activeSharePost?.media_url || null}
+      />
       </div>
     </div>
   )
