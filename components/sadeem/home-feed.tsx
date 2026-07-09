@@ -300,6 +300,9 @@ export function HomeFeed() {
   // Options Sheet State
   const [activeOptionsPost, setActiveOptionsPost] = useState<any | null>(null)
 
+  // Share Sheet State (universal sharing into chats)
+  const [activeSharePost, setActiveSharePost] = useState<any | null>(null)
+
   // Lightbox State
   const [activeLightboxImage, setActiveLightboxImage] = useState<string | null>(null)
 
