@@ -136,12 +136,23 @@ export async function getMessages(otherUserId: string) {
   }
 }
 
-export async function sendMessage(otherUserId: string, text?: string, mediaUrl?: string) {
+export async function sendMessage(
+  otherUserId: string,
+  text?: string,
+  mediaUrl?: string,
+  options?: {
+    mediaType?: 'IMAGE' | 'VOICE' | 'VIDEO';
+    sharedType?: 'POST' | 'REEL' | 'STORY';
+    sharedId?: string;
+    quotedText?: string;
+    replyToId?: string;
+  }
+) {
   try {
     const session = await auth();
     if (!session?.user?.id) return { success: false, error: 'Unauthorized' };
 
-    if (!text && !mediaUrl) {
+    if (!text && !mediaUrl && !options?.sharedId) {
       return { success: false, error: 'Message cannot be empty' };
     }
 
@@ -153,6 +164,11 @@ export async function sendMessage(otherUserId: string, text?: string, mediaUrl?:
       data: {
         text,
         mediaUrl,
+        mediaType: options?.mediaType,
+        sharedType: options?.sharedType,
+        sharedId: options?.sharedId,
+        quotedText: options?.quotedText,
+        replyToId: options?.replyToId,
         senderId: session.user.id,
         chat_id: chatId
       }

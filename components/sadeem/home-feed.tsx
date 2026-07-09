@@ -19,6 +19,7 @@ import { useInView } from "react-intersection-observer"
 import { toast } from "sonner"
 import { FullScreenImageViewer } from "./full-screen-image-viewer"
 import { FeedSkeleton, BlurImage } from "./skeletons"
+import { ShareSheet } from "./share-sheet"
 
 const container = {
   hidden: { opacity: 0 },
