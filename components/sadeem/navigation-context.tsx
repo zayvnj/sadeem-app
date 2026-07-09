@@ -14,6 +14,8 @@ interface NavigationContextType {
   setShowCreatePost: (show: boolean) => void
   showMediaStudio: boolean
   setShowMediaStudio: (show: boolean) => void
+  initialReelId: string | null
+  setInitialReelId: (id: string | null) => void
 }
 
 const NavigationContext = createContext<NavigationContextType | undefined>(undefined)
@@ -24,6 +26,7 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
   const [showStoryUpload, setShowStoryUpload] = useState<boolean>(false)
   const [showCreatePost, setShowCreatePost] = useState<boolean>(false)
   const [showMediaStudio, setShowMediaStudio] = useState<boolean>(false)
+  const [initialReelId, setInitialReelId] = useState<string | null>(null)
   const { data: session } = useSession()
 
   const setSelectedUserId = (id: string | null) => {
@@ -41,7 +44,8 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
       storyViewerData, setStoryViewerData,
       showStoryUpload, setShowStoryUpload,
       showCreatePost, setShowCreatePost,
-      showMediaStudio, setShowMediaStudio
+      showMediaStudio, setShowMediaStudio,
+      initialReelId, setInitialReelId
     }}>
       {children}
     </NavigationContext.Provider>

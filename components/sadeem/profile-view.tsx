@@ -4,7 +4,9 @@ import { useState, useEffect, useRef } from "react"
 import { motion, useScroll, useTransform } from "framer-motion"
 import { Settings, Grid3x3, Film, Bookmark, Bell, Moon, Shield, LogOut, Loader2, User, Camera, Trash2, BadgeCheck, X, ChevronLeft, UserX, BarChart3, TrendingUp, Users, Eye, History } from "lucide-react"
 import { useSession } from "@/lib/auth-context"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { getUserProfile, updateUserProfile, getUserPosts, deleteUserAccount, getSavedPosts } from "@/app/actions/user"
+import { ProfileSkeleton } from "./skeletons"
 import { getStoryArchive } from "@/app/actions/story"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Switch } from "@/components/ui/switch"
@@ -52,8 +54,6 @@ export function ProfileView() {
   const [activeLightboxImage, setActiveLightboxImage] = useState<string | null>(null)
   const [isEditSheetOpen, setIsEditSheetOpen] = useState(false)
 
-  const [profile, setProfile] = useState<any>(null)
-  const [posts, setPosts] = useState<any[]>([])
   const [savedPosts, setSavedPosts] = useState<any[]>([])
   const [loadingSaved, setLoadingSaved] = useState(false)
   const [archiveStories, setArchiveStories] = useState<any[]>([])
@@ -67,17 +67,10 @@ export function ProfileView() {
   const [editAvatarRemoved, setEditAvatarRemoved] = useState(false)
   const [editLoading, setEditLoading] = useState(false)
   const [editError, setEditError] = useState("")
-  const [loading, setLoading] = useState(true)
 
   const [coverPreview, setCoverPreview] = useState<string | null>(null)
   const [isUploadingCover, setIsUploadingCover] = useState(false)
   const coverInputRef = useRef<HTMLInputElement>(null)
-
-  const [stats, setStats] = useState([
-    { label: "منشور", value: 0 },
-    { label: "متابِع", value: 0 },
-    { label: "يتابع", value: 0 },
-  ])
 
   const { handleAvatarTap } = useStoryNavigation()
 
@@ -90,38 +83,42 @@ export function ProfileView() {
   const { data: session } = useSession()
   const currentUser = session?.user
 
+  const queryClient = useQueryClient()
+
+  // Cached profile data: instant on back navigation, refreshed in background when stale
+  const { data: profile, isPending: profileLoading } = useQuery({
+    queryKey: ['profile', currentUser?.id],
+    enabled: !!currentUser?.id,
+    staleTime: 1000 * 60 * 5,
+    networkMode: 'offlineFirst',
+    queryFn: async () => {
+      const res = await getUserProfile(currentUser!.id as string)
+      if (!res.success) throw new Error(typeof res.error === 'string' ? res.error : 'Failed to load profile')
+      return res.data as any
+    },
+  })
+
+  const { data: posts = [] } = useQuery({
+    queryKey: ['profile', currentUser?.id, 'posts'],
+    enabled: !!currentUser?.id,
+    staleTime: 1000 * 60 * 5,
+    networkMode: 'offlineFirst',
+    queryFn: async () => {
+      const res = await getUserPosts(currentUser!.id as string)
+      return res.success && res.data ? (res.data as any[]) : []
+    },
+  })
+
+  const stats = [
+    { label: "منشور", value: posts.length },
+    { label: "متابِع", value: profile?.followersCount || 0 },
+    { label: "يتابع", value: profile?.followingCount || 0 },
+  ]
+
+  // Keep the visible cover photo in sync with persisted data (fixes disappearing cover)
   useEffect(() => {
-    const fetchProfileData = async () => {
-      if (!currentUser?.id) {
-        setLoading(false)
-        return
-      }
-      try {
-        const profileRes = await getUserProfile(currentUser.id)
-        if (profileRes.success && profileRes.data) {
-          const profileData = profileRes.data
-          setProfile(profileData)
-          setStats(prev => prev.map(s => {
-            if(s.label === "متابع") return { ...s, value: profileData.followersCount || 0 }
-            if(s.label === "يتابع") return { ...s, value: profileData.followingCount || 0 }
-            return s
-          }))
-        }
-
-        const postsRes = await getUserPosts(currentUser.id)
-        if (postsRes.success && postsRes.data) {
-          setPosts(postsRes.data as any)
-          setStats(prev => prev.map(s => s.label === "منشور" ? { ...s, value: postsRes.data.length } : s))
-        }
-      } catch (error) {
-        console.error('Error fetching profile data:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchProfileData()
-  }, [currentUser])
+    setCoverPreview(profile?.coverImage || profile?.coverUrl || null)
+  }, [profile])
 
   useEffect(() => {
     if (activeTab === "saved" && savedPosts.length === 0) {
@@ -150,7 +147,7 @@ export function ProfileView() {
   // Populate edit form when sheet opens
   useEffect(() => {
     if (isEditSheetOpen) {
-      setCoverPreview(profile?.coverImage || null)
+      setCoverPreview(profile?.coverImage || profile?.coverUrl || null)
       const defaultUsername = currentUser?.email?.split('@')[0] || "مستخدم_سديم"
       setEditFullName(profile?.fullName || profile?.full_name || "")
       setEditUsername(profile?.username || defaultUsername)
@@ -195,9 +192,10 @@ export function ProfileView() {
         const res = await updateUserProfile({ coverUrl })
 
         if (res.success) {
-          setProfile((prev: any) => prev ? { ...prev, coverImage: coverUrl, coverUrl: coverUrl } : prev)
+          // Persist into the query cache so the cover survives navigation
+          queryClient.setQueryData(['profile', currentUser?.id], (prev: any) => prev ? { ...prev, coverImage: coverUrl, coverUrl: coverUrl } : prev)
+          setCoverPreview(coverUrl)
           toast.success("تم تحديث صورة الغلاف بنجاح")
-          updateSession()
         } else {
           console.error("Cover upload backend error:", res.error)
           toast.error(res.error || "فشل في تحديث صورة الغلاف")
@@ -279,7 +277,7 @@ export function ProfileView() {
         return
       }
 
-      setProfile({ ...profile, ...updates, full_name: updates.fullName, avatar_url: updates.avatarUrl })
+      queryClient.setQueryData(['profile', currentUser?.id], (prev: any) => ({ ...(prev || {}), ...updates, full_name: updates.fullName, avatar_url: updates.avatarUrl }))
       setIsEditSheetOpen(false)
       toast.success("تم حفظ الملف الشخصي بنجاح")
     } catch (e: any) {
@@ -310,7 +308,7 @@ export function ProfileView() {
     try {
       const res = await deleteUserAccount()
       if (res.success) {
-        await signOut(auth)
+        await supabase.auth.signOut()
         await Preferences.clear()
         localStorage.clear()
         toast.success("تم حذف الحساب بنجاح")
@@ -323,12 +321,8 @@ export function ProfileView() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <Loader2 className="size-8 animate-spin text-muted-foreground" />
-      </div>
-    )
+  if (profileLoading) {
+    return <ProfileSkeleton />
   }
 
   const username = profile?.username || currentUser?.email?.split('@')[0] || "مستخدم_سديم"

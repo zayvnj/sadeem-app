@@ -10,10 +10,12 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: {
       queries: {
-        gcTime: 1000 * 60 * 60 * 24, // 24 hours
-        staleTime: 1000 * 10, // 10 seconds
-        refetchOnWindowFocus: true,
+        gcTime: 1000 * 60 * 60 * 24, // Keep cached data for 24 hours (persisted to IndexedDB)
+        staleTime: 1000 * 60 * 5, // Aggressive: data stays fresh for 5 minutes -> instant back/forward navigation
+        refetchOnWindowFocus: false, // Don't refetch every time the app regains focus
         refetchOnReconnect: true,
+        networkMode: 'offlineFirst', // Serve cache first, hit network in background
+        retry: 1,
       },
     },
   }))
