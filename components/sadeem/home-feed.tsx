@@ -668,11 +668,7 @@ export function HomeFeed() {
                 />
                 <ActionButton
                   icon={<Send className="size-5" />}
-                  onClick={() => {
-                     alert("تمت المشاركة بنجاح!");
-                     // In a real app, open a share sheet or copy link
-                     navigator.clipboard.writeText(window.location.href).catch(() => {});
-                  }}
+                  onClick={() => setActiveSharePost(post)}
                 />
                 <motion.button
                   whileTap={{ scale: 0.8 }}
