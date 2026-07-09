@@ -341,6 +341,39 @@ export function HomeFeed() {
     setDragY(0)
   }
 
+  // Native touch-based pull-to-refresh.
+  // Replaces the framer-motion `drag` container which set touch-action:none,
+  // hijacked native scrolling and swallowed story taps (scroll freeze bug).
+  const feedScrollRef = useRef<HTMLDivElement>(null)
+  const touchStartYRef = useRef<number | null>(null)
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (feedScrollRef.current && feedScrollRef.current.scrollTop <= 0) {
+      touchStartYRef.current = e.touches[0].clientY
+    } else {
+      touchStartYRef.current = null
+    }
+  }
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touchStartYRef.current === null) return
+    const delta = e.touches[0].clientY - touchStartYRef.current
+    if (delta > 0 && feedScrollRef.current && feedScrollRef.current.scrollTop <= 0) {
+      setDragY(Math.min(delta * 0.5, 130))
+    } else if (dragY !== 0) {
+      setDragY(0)
+    }
+  }
+
+  const handleTouchEnd = () => {
+    touchStartYRef.current = null
+    if (dragY > 90 && !isRefreshing) {
+      handleRefresh()
+    } else {
+      setDragY(0)
+    }
+  }
+
   return (
     <div className="pb-4 h-full relative overflow-hidden flex flex-col">
       <StoryUpload
