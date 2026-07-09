@@ -16,7 +16,7 @@ import { uploadMediaToSupabase } from "@/lib/supabase-storage"
 export function ReelsView() {
   const [reels, setReels] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const { setSelectedUserId } = useNavigation()
+  const { setSelectedUserId, initialReelId, setInitialReelId } = useNavigation()
   const { data: session } = useSession()
   const currentUser = session?.user
 

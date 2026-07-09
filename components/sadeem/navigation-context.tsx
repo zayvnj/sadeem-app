@@ -26,6 +26,7 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
   const [showStoryUpload, setShowStoryUpload] = useState<boolean>(false)
   const [showCreatePost, setShowCreatePost] = useState<boolean>(false)
   const [showMediaStudio, setShowMediaStudio] = useState<boolean>(false)
+  const [initialReelId, setInitialReelId] = useState<string | null>(null)
   const { data: session } = useSession()
 
   const setSelectedUserId = (id: string | null) => {

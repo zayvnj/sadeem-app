@@ -35,7 +35,7 @@ const item = {
 
 export function HomeFeed() {
   const [viewedStoryIds, setViewedStoryIds] = useState<Set<string>>(new Set())
-  const { setSelectedUserId, storyViewerData, setStoryViewerData, setShowStoryUpload, setShowMediaStudio } = useNavigation()
+  const { setSelectedUserId, storyViewerData, setStoryViewerData, setShowStoryUpload, setShowMediaStudio, setInitialReelId } = useNavigation()
 
   const { data: session } = useSession()
   const currentUser = session?.user
